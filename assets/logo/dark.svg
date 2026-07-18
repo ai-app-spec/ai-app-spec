@@ -1,0 +1,39 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="64"
+  height="64"
+  viewBox="0 0 64 64"
+  fill="none"
+  role="img"
+  aria-labelledby="logo-title logo-description"
+>
+  <title id="logo-title">AI App Spec</title>
+  <desc id="logo-description">A central app specification surrounded by three runtime brackets.</desc>
+
+  <mask id="core-cutout">
+    <rect width="64" height="64" fill="white" />
+    <circle cx="32" cy="32" r="3" fill="black" />
+  </mask>
+
+  <g
+    stroke="#FFF"
+    stroke-width="6"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M18 19.5 32 11l14 8.5" />
+    <path d="M50 27v14L36 49.5" />
+    <path d="M28 49.5 14 41V27" />
+  </g>
+
+  <rect
+    x="23.5"
+    y="23.5"
+    width="17"
+    height="17"
+    rx="4"
+    transform="rotate(45 32 32)"
+    fill="#FFF"
+    mask="url(#core-cutout)"
+  />
+</svg>
