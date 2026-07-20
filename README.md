@@ -22,6 +22,12 @@ An app package might compose agent instructions and skills, tool integrations, p
 
 The AI App Spec defines the contract between those two sides. It is not a new runtime and does not prescribe how providers implement one. It establishes a common unit that can be validated, installed, configured, upgraded, and removed across compatible runtimes.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/diagram/ai-native-apps-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/diagram/ai-native-apps-light.svg">
+  <img alt="Two side-by-side panels. Today: a customer connects to three separate ISVs, each rebuilding the same stack of chat UI, agents, orchestration, and inference. With AI App Spec: the same customer connects to a set of thin apps that all run on one shared managed AI runtime, with inference centralized." src="assets/diagram/ai-native-apps-light.svg">
+</picture>
+
 The result is a different way to deliver applied AI:
 
 - **End-user teams** install specialized applications into a runtime they already trust. They retain a consistent control plane for identity, permissions, data access, auditability, inference, and cost.

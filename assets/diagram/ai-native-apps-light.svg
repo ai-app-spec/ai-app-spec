@@ -1,0 +1,91 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="1000"
+  height="560"
+  viewBox="0 0 1000 560"
+  font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+  role="img"
+  aria-labelledby="diagram-title diagram-description"
+>
+  <title id="diagram-title">Today versus with AI App Spec</title>
+  <desc id="diagram-description">Two side-by-side panels. On the left, labeled Today, a customer connects to three separate ISVs, each rebuilding the same stack of chat UI, agents, orchestration, and inference. On the right, labeled With AI App Spec, the same customer connects to a set of thin apps that all run on one shared managed AI runtime providing inference, tools, skills, scheduler, and sandboxes.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9" fill="none" stroke="#7A7A74" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect width="1000" height="560" fill="#FFFFFF"/>
+
+  <!-- ================= LEFT: TODAY ================= -->
+  <text x="270" y="48" text-anchor="middle" font-size="17" fill="#3A3A36">Today</text>
+
+  <!-- customer -->
+  <rect x="170" y="78" width="200" height="56" rx="10" fill="#ECEDE7" stroke="#B9BAB2" stroke-width="1.3"/>
+  <text x="270" y="112" text-anchor="middle" font-size="16" fill="#3A3A36">Customer</text>
+
+  <!-- arrows to ISVs -->
+  <line x1="240" y1="136" x2="130" y2="200" stroke="#7A7A74" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <line x1="270" y1="136" x2="270" y2="200" stroke="#7A7A74" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <line x1="300" y1="136" x2="410" y2="200" stroke="#7A7A74" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- ISV boxes -->
+  <g>
+    <rect x="45" y="210" width="140" height="172" rx="11" fill="#FBF1EC" stroke="#C97B5D" stroke-width="1.3"/>
+    <text x="115" y="242" text-anchor="middle" font-size="15" font-weight="600" fill="#6E3418">ISV A</text>
+    <text x="115" y="272" text-anchor="middle" font-size="13" fill="#B4552D">Chat UI</text>
+    <text x="115" y="298" text-anchor="middle" font-size="13" fill="#B4552D">Agents</text>
+    <text x="115" y="324" text-anchor="middle" font-size="13" fill="#B4552D">Orchestration</text>
+    <text x="115" y="350" text-anchor="middle" font-size="13" fill="#B4552D">Inference</text>
+  </g>
+  <g>
+    <rect x="200" y="210" width="140" height="172" rx="11" fill="#FBF1EC" stroke="#C97B5D" stroke-width="1.3"/>
+    <text x="270" y="242" text-anchor="middle" font-size="15" font-weight="600" fill="#6E3418">ISV B</text>
+    <text x="270" y="272" text-anchor="middle" font-size="13" fill="#B4552D">Chat UI</text>
+    <text x="270" y="298" text-anchor="middle" font-size="13" fill="#B4552D">Agents</text>
+    <text x="270" y="324" text-anchor="middle" font-size="13" fill="#B4552D">Orchestration</text>
+    <text x="270" y="350" text-anchor="middle" font-size="13" fill="#B4552D">Inference</text>
+  </g>
+  <g>
+    <rect x="355" y="210" width="140" height="172" rx="11" fill="#FBF1EC" stroke="#C97B5D" stroke-width="1.3"/>
+    <text x="425" y="242" text-anchor="middle" font-size="15" font-weight="600" fill="#6E3418">ISV C</text>
+    <text x="425" y="272" text-anchor="middle" font-size="13" fill="#B4552D">Chat UI</text>
+    <text x="425" y="298" text-anchor="middle" font-size="13" fill="#B4552D">Agents</text>
+    <text x="425" y="324" text-anchor="middle" font-size="13" fill="#B4552D">Orchestration</text>
+    <text x="425" y="350" text-anchor="middle" font-size="13" fill="#B4552D">Inference</text>
+  </g>
+
+  <text x="270" y="452" text-anchor="middle" font-size="13.5" fill="#6B6B65">Every ISV rebuilds the same stack</text>
+  <text x="270" y="476" text-anchor="middle" font-size="13.5" fill="#6B6B65">and resells inference</text>
+
+  <!-- ================= RIGHT: WITH AI APP SPEC ================= -->
+  <text x="760" y="48" text-anchor="middle" font-size="17" fill="#3A3A36">With AI App Spec</text>
+
+  <!-- customer -->
+  <rect x="660" y="78" width="200" height="56" rx="10" fill="#ECEDE7" stroke="#B9BAB2" stroke-width="1.3"/>
+  <text x="760" y="112" text-anchor="middle" font-size="16" fill="#3A3A36">Customer</text>
+
+  <!-- arrow -->
+  <line x1="760" y1="136" x2="760" y2="200" stroke="#7A7A74" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- app chips -->
+  <g>
+    <rect x="566" y="212" width="88" height="46" rx="9" fill="#FBF1EC" stroke="#C97B5D" stroke-width="1.3"/>
+    <text x="610" y="240" text-anchor="middle" font-size="13.5" fill="#6E3418">App A</text>
+    <rect x="666" y="212" width="88" height="46" rx="9" fill="#FBF1EC" stroke="#C97B5D" stroke-width="1.3"/>
+    <text x="710" y="240" text-anchor="middle" font-size="13.5" fill="#6E3418">App B</text>
+    <rect x="766" y="212" width="88" height="46" rx="9" fill="#FBF1EC" stroke="#C97B5D" stroke-width="1.3"/>
+    <text x="810" y="240" text-anchor="middle" font-size="13.5" fill="#6E3418">App C</text>
+    <rect x="866" y="212" width="88" height="46" rx="9" fill="#FDF8F5" stroke="#C97B5D" stroke-width="1.3" stroke-dasharray="5 4"/>
+    <text x="910" y="240" text-anchor="middle" font-size="13.5" fill="#A5765F">App N</text>
+  </g>
+
+  <!-- runtime box -->
+  <rect x="566" y="274" width="388" height="96" rx="13" fill="#EFECFA" stroke="#8B7FD6" stroke-width="1.3"/>
+  <text x="760" y="314" text-anchor="middle" font-size="16" fill="#4B3FA8">Managed AI runtime</text>
+  <text x="760" y="342" text-anchor="middle" font-size="13" fill="#7568C4">inference · tools · skills · scheduler · sandboxes</text>
+
+  <text x="760" y="452" text-anchor="middle" font-size="13.5" fill="#6B6B65">Thin vertical apps on a shared runtime,</text>
+  <text x="760" y="476" text-anchor="middle" font-size="13.5" fill="#6B6B65">inference centralized</text>
+</svg>
