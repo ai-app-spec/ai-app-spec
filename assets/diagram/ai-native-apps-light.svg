@@ -8,7 +8,7 @@
   aria-labelledby="diagram-title diagram-description"
 >
   <title id="diagram-title">Today versus with AI App Spec</title>
-  <desc id="diagram-description">Two side-by-side panels. On the left, labeled Today, a customer connects to three separate ISVs, each rebuilding the same stack of chat UI, agents, orchestration, and inference. On the right, labeled With AI App Spec, the same customer connects to a set of thin apps that all run on one shared managed AI runtime, with inference centralized.</desc>
+  <desc id="diagram-description">Two side-by-side panels. On the left, labeled Today, a customer connects to three separate ISVs, each rebuilding the same stack of chat UI, agents, orchestration, and inference. On the right, labeled With AI App Spec, the same customer connects to a set of thin apps that all run on one shared managed AI runtime providing inference, tools, skills, scheduler, and sandboxes.</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -84,7 +84,7 @@
   <!-- runtime box -->
   <rect x="566" y="274" width="388" height="96" rx="13" fill="#EFECFA" stroke="#8B7FD6" stroke-width="1.3"/>
   <text x="760" y="314" text-anchor="middle" font-size="16" fill="#4B3FA8">Managed AI runtime</text>
-  <text x="760" y="342" text-anchor="middle" font-size="13" fill="#7568C4">identity · permissions · data access · inference</text>
+  <text x="760" y="342" text-anchor="middle" font-size="13" fill="#7568C4">inference · tools · skills · scheduler · sandboxes</text>
 
   <text x="760" y="452" text-anchor="middle" font-size="13.5" fill="#6B6B65">Thin vertical apps on a shared runtime,</text>
   <text x="760" y="476" text-anchor="middle" font-size="13.5" fill="#6B6B65">inference centralized</text>
