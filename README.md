@@ -28,7 +28,7 @@ The result is a different way to deliver applied AI:
 - **Runtime providers** gain a distribution surface for complete applications. They can compete on execution quality, safety, governance, models, and developer experience while supporting a shared packaging contract.
 - **ISVs** ship their domain expertise as a repeatable product instead of rebuilding an agent platform or delivering one-off services. They can focus on the last mile: workflows, integrations, evaluation, adoption, and change management.
 
-In this model, runtime providers supply the horizontal platform, ISVs supply vertical and functional specialization, and customers can adopt both without accepting a new infrastructure silo for every use case.
+In this model, runtime providers supply the horizontal platform, ISVs supply vertical and functional specialization, and customers can adopt both without accepting a new infrastructure silo and vendor for every use case.
 
 ## Why an open specification
 
