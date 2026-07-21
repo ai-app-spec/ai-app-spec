@@ -65,10 +65,8 @@ AI runtimes are converging on a common set of responsibilities even as their API
 | **Artifacts** | Define durable inputs and outputs such as documents, files, generated assets, or structured results. | Store content and metadata, enforce access control, manage provenance and lifecycle. |
 | **Interaction and delivery** | Declare human entry points, notifications, approval steps, or supported channels. | Render or route interactions through native clients and connected channels while preserving identity. |
 | **Configuration and secrets** | Define typed configuration and secret requirements without embedding customer values. | Collect and validate values, store secrets securely, and inject them only where authorized. |
-| **Identity and governance** | Request permissions and identify actions that need elevated trust or human involvement. | Authenticate principals, authorize actions, collect approvals, isolate tenants, and enforce organizational policy. |
-| **Events and observability** | Declare meaningful app events, health signals, and evaluation points. | Produce logs, traces, metrics, usage records, audit history, and operational status with appropriate redaction. |
 
-Not every app needs every primitive, and not every runtime will support every primitive initially. In order to provide value, this specification needs a small common core plus an explicit way to negotiate additional capabilities and gracefully degrade via partial installations.
+Not every app needs every primitive, and not every runtime will support every primitive initially. In order to provide value, this specification needs a small common core plus an explicit way to negotiate additional capabilities.
 
 ## Apps are resource graphs
 
@@ -97,18 +95,6 @@ Bindings must support:
 - suspension or removal with explicit state handling
 
 A provider may implement a core resource directly, map it to several native resources, or reject it as unsupported. Provider-specific behavior lives behind declared capabilities and namespaced extensions, validated through conformance testing.
-
-Overall, this specification standardizes the boundary needed for an app and a runtime to interoperate:
-
-- package identity, versioning, integrity, and compatibility
-- logical resource types, stable references, and dependency relationships
-- capability requirements and provider-extension mechanics
-- configuration, secret, connector, and permission declarations
-- installation lifecycle operations and observable status
-- validation and error semantics
-- the separation of package definition, installation configuration, and runtime state
-
-Tool protocols, API descriptions, authorization flows, model APIs, container formats, and telemetry formats should be referenced or bound where possible instead of reinventing these inside the app specification.
 
 ## The package-runtime contract
 
