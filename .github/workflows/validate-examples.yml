@@ -27,5 +27,5 @@ jobs:
       - name: Validate examples
         run: |
           for bundle in examples/*/; do
-            bun ./src/aiappctl/cli.js validate "$bundle"
+            bun ./src/aiappctl/cli.js validate --package="$bundle"
           done

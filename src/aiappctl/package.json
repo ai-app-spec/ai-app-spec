@@ -8,12 +8,10 @@
     "aiappctl": "./cli.js"
   },
   "scripts": {
-    "validate": "bun ./cli.js validate",
-    "validate:example": "bun ./cli.js validate ../../examples/helloworld"
+    "validate": "bun ./cli.js validate"
   },
   "dependencies": {
     "ajv": "^8.17.1",
     "yaml": "^2.8.1"
   }
 }
-

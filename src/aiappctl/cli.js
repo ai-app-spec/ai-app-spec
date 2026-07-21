@@ -12,7 +12,21 @@ const schemaPath = fileURLToPath(
 );
 
 function usage() {
-  console.error("Usage: aiappctl validate <bundle-directory|app.yaml>");
+  console.error(
+    "Usage: aiappctl validate --package=<bundle-directory|app.yaml>",
+  );
+}
+
+function parsePackageArgument(args) {
+  if (args.length === 1 && args[0].startsWith("--package=")) {
+    return args[0].slice("--package=".length) || undefined;
+  }
+
+  if (args.length === 2 && args[0] === "--package") {
+    return args[1] || undefined;
+  }
+
+  return undefined;
 }
 
 async function resolveManifestPath(inputPath) {
@@ -100,9 +114,10 @@ async function validate(inputPath) {
 }
 
 async function main() {
-  const [command, inputPath, ...extraArgs] = process.argv.slice(2);
+  const [command, ...args] = process.argv.slice(2);
+  const inputPath = parsePackageArgument(args);
 
-  if (command !== "validate" || !inputPath || extraArgs.length > 0) {
+  if (command !== "validate" || !inputPath) {
     usage();
     process.exitCode = 2;
     return;
