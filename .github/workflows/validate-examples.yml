@@ -20,6 +20,18 @@ jobs:
         with:
           bun-version: 1.3.9
 
+      - name: Install spec dependencies
+        working-directory: spec
+        run: bun install --frozen-lockfile
+
+      - name: Check generated JSON Schema
+        working-directory: spec
+        run: bun run generate:check
+
+      - name: Test spec
+        working-directory: spec
+        run: bun test
+
       - name: Install CLI dependencies
         working-directory: src/aiappctl
         run: bun install --frozen-lockfile

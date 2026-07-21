@@ -1,0 +1,18 @@
+{
+  "name": "@ai-app-spec/spec",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./v0.1": "./v0.1/app.ts"
+  },
+  "scripts": {
+    "generate": "bun ./generate.ts",
+    "generate:check": "bun ./generate.ts --check",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}
+

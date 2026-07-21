@@ -2,14 +2,10 @@
 
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import Ajv2020 from "ajv/dist/2020.js";
+import { appManifestSchema } from "@ai-app-spec/spec/v0.1";
 import { parseDocument } from "yaml";
 
 const manifestFilename = "app.yaml";
-const schemaPath = fileURLToPath(
-  new URL("../../spec/v0.1/app.schema.json", import.meta.url),
-);
 
 function usage() {
   console.error(
@@ -44,44 +40,22 @@ async function resolveManifestPath(inputPath) {
   throw new Error(`unsupported input: ${inputPath}`);
 }
 
-function formatSchemaError(error) {
-  let location = error.instancePath || "/";
+function formatIssue(issue) {
+  const location =
+    issue.path.length === 0
+      ? "/"
+      : `/${issue.path
+          .map((segment) =>
+            String(segment).replaceAll("~", "~0").replaceAll("/", "~1"),
+          )
+          .join("/")}`;
 
-  if (error.keyword === "required") {
-    location = `${location.replace(/\/$/, "")}/${error.params.missingProperty}`;
-  }
-
-  return `${location}: ${error.message}`;
-}
-
-function validateResourceGraph(manifest) {
-  const errors = [];
-  const resourceIds = new Set();
-
-  for (const [index, resource] of manifest.spec.resources.entries()) {
-    if (resourceIds.has(resource.id)) {
-      errors.push(
-        `/spec/resources/${index}/id: duplicate resource id '${resource.id}'`,
-      );
-    }
-    resourceIds.add(resource.id);
-  }
-
-  if (!resourceIds.has(manifest.spec.entrypoint)) {
-    errors.push(
-      `/spec/entrypoint: resource '${manifest.spec.entrypoint}' does not exist`,
-    );
-  }
-
-  return errors;
+  return `${location}: ${issue.message}`;
 }
 
 async function validate(inputPath) {
   const manifestPath = await resolveManifestPath(inputPath);
-  const [manifestSource, schemaSource] = await Promise.all([
-    readFile(manifestPath, "utf8"),
-    readFile(schemaPath, "utf8"),
-  ]);
+  const manifestSource = await readFile(manifestPath, "utf8");
 
   const document = parseDocument(manifestSource, {
     prettyErrors: true,
@@ -96,20 +70,18 @@ async function validate(inputPath) {
   }
 
   const manifest = document.toJS();
-  const schema = JSON.parse(schemaSource);
-  const ajv = new Ajv2020({ allErrors: true, strict: true });
-  const validateSchema = ajv.compile(schema);
+  const result = appManifestSchema.safeParse(manifest);
 
-  if (!validateSchema(manifest)) {
+  if (!result.success) {
     return {
       manifestPath,
-      errors: validateSchema.errors.map(formatSchemaError),
+      errors: result.error.issues.map(formatIssue),
     };
   }
 
   return {
     manifestPath,
-    errors: validateResourceGraph(manifest),
+    errors: [],
   };
 }
 
