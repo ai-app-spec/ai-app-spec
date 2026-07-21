@@ -8,6 +8,7 @@
     "aiappctl": "./cli.js"
   },
   "scripts": {
+    "test": "bun test",
     "validate": "bun ./cli.js validate"
   },
   "dependencies": {

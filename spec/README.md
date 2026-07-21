@@ -2,6 +2,8 @@
 
 The authoritative version 0.1 specification is composed from Zod schemas in [`v0.1/app.ts`](v0.1/app.ts). [`v0.1/app.schema.json`](v0.1/app.schema.json) is a generated structural JSON Schema artifact for tools that cannot consume the code package directly. Cross-resource invariants such as unique resource IDs and entrypoint resolution are expressed as Zod refinements.
 
+Version 0.1 is a draft and may change incompatibly until it is explicitly frozen.
+
 An unpacked app bundle is a directory with an `app.yaml` manifest at its root:
 
 ```text
@@ -34,4 +36,5 @@ Run the reference validator from the repository root:
 cd src/aiappctl
 bun install
 bun run validate --package=../../examples/hello-oci
+bun ./cli.js digest ../../examples/hello-claude/packages/greeter.agentpkg.yaml
 ```

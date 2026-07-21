@@ -54,7 +54,9 @@ export const absolutePackageLocationSchema = z
   .meta({ id: "AbsolutePackageLocation" });
 
 export const packageLocationSchema = z
-  .union([packageRelativeLocationSchema, absolutePackageLocationSchema])
+  .union([packageRelativeLocationSchema, absolutePackageLocationSchema], {
+    error: "must be a package-relative path (./...) or an absolute URI",
+  })
   .meta({ id: "PackageLocation" });
 
 export const sha256DigestSchema = z

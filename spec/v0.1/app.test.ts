@@ -142,7 +142,14 @@ describe("appManifestSchema", () => {
       const input = manifest();
       input.spec.resources[0]!.implementation.package.location = location;
 
-      expect(appManifestSchema.safeParse(input).success).toBe(false);
+      const result = appManifestSchema.safeParse(input);
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.message).toBe(
+          "must be a package-relative path (./...) or an absolute URI",
+        );
+      }
     }
   });
 

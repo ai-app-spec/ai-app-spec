@@ -10,7 +10,11 @@ const manifestFilename = "app.yaml";
 
 function usage() {
   console.error(
-    "Usage: aiappctl validate --package=<bundle-directory|app.yaml>",
+    [
+      "Usage:",
+      "  aiappctl validate --package=<bundle-directory|app.yaml>",
+      "  aiappctl digest <file>",
+    ].join("\n"),
   );
 }
 
@@ -146,8 +150,31 @@ async function validate(inputPath) {
   };
 }
 
+async function digest(inputPath) {
+  const resolvedPath = path.resolve(inputPath);
+  const inputStat = await stat(resolvedPath);
+
+  if (!inputStat.isFile()) {
+    throw new Error(`not a file: ${inputPath}`);
+  }
+
+  const bytes = await readFile(resolvedPath);
+  return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+}
+
 async function main() {
   const [command, ...args] = process.argv.slice(2);
+
+  if (command === "digest" && args.length === 1) {
+    try {
+      console.log(await digest(args[0]));
+    } catch (error) {
+      console.error(`aiappctl: ${error.message}`);
+      process.exitCode = 1;
+    }
+    return;
+  }
+
   const inputPath = parsePackageArgument(args);
 
   if (command !== "validate" || !inputPath) {

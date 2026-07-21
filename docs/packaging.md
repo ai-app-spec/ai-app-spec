@@ -47,4 +47,6 @@ implementation:
 
 Package-relative locations may identify bytes shipped inside the app package. Absolute locations may identify content in an external distribution system. The manifest does not contain Dockerfiles, build arguments, runtime topology, container-engine configuration, or capacity settings.
 
+Digests cover the package's raw bytes; reformatting a YAML package therefore changes its identity.
+
 Future tooling may automatically discover adapters and produce a deployment-ready canonical package, but the adapter protocol and OCI agent invocation contract are intentionally deferred until they can be exercised against working runtime implementations.
