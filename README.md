@@ -64,3 +64,7 @@ Installing specialized AI capability should become an (easy) deployment decision
 ## Project status
 
 AI App Spec is an early proposal. The first milestone is intentionally small, consisting of a minimal schema, a handful of useful example apps, and a reference CLI demonstrating deployment through a provider-neutral runtime interface. The goal is to make the contract concrete, learn from working implementations, and develop the specification in public.
+
+## Further reading
+
+- [Concepts: AI applications, packages, and runtimes](docs/concepts.md)
