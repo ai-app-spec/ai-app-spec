@@ -1,4 +1,4 @@
-name: Validate examples
+name: Check spec schema
 
 on:
   pull_request:
@@ -7,8 +7,8 @@ permissions:
   contents: read
 
 jobs:
-  validate:
-    name: Validate example app packages
+  check:
+    name: Check generated spec schema
     runs-on: ubuntu-latest
 
     steps:
@@ -24,16 +24,6 @@ jobs:
         working-directory: spec
         run: bun install --frozen-lockfile
 
-      - name: Test spec
+      - name: Check generated JSON Schema
         working-directory: spec
-        run: bun test
-
-      - name: Install CLI dependencies
-        working-directory: src/aiappctl
-        run: bun install --frozen-lockfile
-
-      - name: Validate examples
-        run: |
-          for bundle in examples/*/; do
-            bun ./src/aiappctl/cli.js validate --package="$bundle"
-          done
+        run: bun run generate:check
