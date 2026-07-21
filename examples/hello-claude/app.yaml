@@ -10,7 +10,7 @@ spec:
   entrypoint: greeter
   resources:
     - id: greeter
-      type: agent
+      kind: Agent
       implementation:
         format: anthropic.com/managed-agent:v1
         package:

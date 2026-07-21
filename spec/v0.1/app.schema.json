@@ -90,9 +90,9 @@
         "id": {
           "$ref": "#/$defs/Identifier"
         },
-        "type": {
+        "kind": {
           "type": "string",
-          "const": "agent"
+          "const": "Agent"
         },
         "implementation": {
           "$ref": "#/$defs/AgentImplementation"
@@ -100,7 +100,7 @@
       },
       "required": [
         "id",
-        "type",
+        "kind",
         "implementation"
       ],
       "additionalProperties": false

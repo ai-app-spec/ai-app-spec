@@ -10,7 +10,7 @@ spec:
   entrypoint: greeter
   resources:
     - id: greeter
-      type: agent
+      kind: Agent
       implementation:
         format: app-spec.ai/agent-container:v1
         package:

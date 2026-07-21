@@ -79,7 +79,7 @@ export const agentImplementationSchema = z
 export const agentResourceSchema = z
   .strictObject({
     id: identifierSchema,
-    type: z.literal("agent"),
+    kind: z.literal("Agent"),
     implementation: agentImplementationSchema,
   })
   .meta({ id: "AgentResource" });

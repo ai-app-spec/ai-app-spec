@@ -14,7 +14,7 @@ function manifest() {
       resources: [
         {
           id: "greeter",
-          type: "agent",
+          kind: "Agent",
           implementation: {
             format: "app-spec.ai/agent-container:v1",
             package: {
@@ -82,7 +82,7 @@ describe("appManifestSchema", () => {
     const input = manifest();
     input.spec.resources.push({
       id: "greeter",
-      type: "agent",
+      kind: "Agent",
       implementation: {
         format: "app-spec.ai/agent-container:v1",
         package: {
