@@ -6,7 +6,7 @@ function manifest() {
     apiVersion: "app-spec.ai/v0.1",
     kind: "App",
     metadata: {
-      name: "hello-world",
+      name: "hello-oci",
       version: "0.1.0",
     },
     spec: {
@@ -16,11 +16,11 @@ function manifest() {
           id: "greeter",
           type: "agent",
           implementation: {
-            format: "example.app-spec.ai/text-agent:v1",
+            format: "app-spec.ai/agent-container:v1",
             package: {
-              location: "./packages/greeter.txt",
+              location: "oci://registry.example.com/ai-app-spec/hello-oci",
               digest:
-                "sha256:79d710e9d44e7ad62b2c570b6a3d60f1655a5e0e7a7527f3559756ed67e3ef21",
+                "sha256:0000000000000000000000000000000000000000000000000000000000000000",
             },
           },
         },
@@ -84,9 +84,9 @@ describe("appManifestSchema", () => {
       id: "greeter",
       type: "agent",
       implementation: {
-        format: "example.app-spec.ai/text-agent:v1",
+        format: "app-spec.ai/agent-container:v1",
         package: {
-          location: "./packages/other.txt",
+          location: "oci://registry.example.com/ai-app-spec/other",
           digest:
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         },
@@ -124,10 +124,10 @@ describe("appManifestSchema", () => {
     expect(appManifestSchema.safeParse(input).success).toBe(false);
   });
 
-  test("accepts an absolute implementation package URI", () => {
+  test("accepts a package-relative implementation location", () => {
     const input = manifest();
     input.spec.resources[0]!.implementation.package.location =
-      "oci://ghcr.io/example/greeter";
+      "./packages/greeter.agentpkg";
 
     expect(appManifestSchema.safeParse(input).success).toBe(true);
   });
@@ -148,7 +148,7 @@ describe("appManifestSchema", () => {
 
   test("rejects unnamespaced implementation formats", () => {
     const input = manifest();
-    input.spec.resources[0]!.implementation.format = "text-agent:v1";
+    input.spec.resources[0]!.implementation.format = "agent:v1";
 
     expect(appManifestSchema.safeParse(input).success).toBe(false);
   });

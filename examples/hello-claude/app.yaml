@@ -1,0 +1,18 @@
+apiVersion: app-spec.ai/v0.1
+kind: App
+
+metadata:
+  name: hello-claude
+  version: 0.1.0
+  description: A minimal app using a Claude Managed Agents create payload.
+
+spec:
+  entrypoint: greeter
+  resources:
+    - id: greeter
+      type: agent
+      implementation:
+        format: anthropic.com/managed-agent:v1
+        package:
+          location: ./packages/greeter.agentpkg
+          digest: sha256:1ea49d045b0bf85c35366986dbd37212979b1013c36a58df86b340d694a7ae47

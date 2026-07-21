@@ -33,5 +33,5 @@ Run the reference validator from the repository root:
 ```sh
 cd src/aiappctl
 bun install
-bun run validate --package=../../examples/helloworld
+bun run validate --package=../../examples/hello-oci
 ```
