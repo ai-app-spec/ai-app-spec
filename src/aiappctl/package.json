@@ -1,0 +1,17 @@
+{
+  "name": "@ai-app-spec/aiappctl",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reference CLI for AI App Spec bundles",
+  "type": "module",
+  "bin": {
+    "aiappctl": "./cli.js"
+  },
+  "scripts": {
+    "validate": "bun ./cli.js validate"
+  },
+  "dependencies": {
+    "@ai-app-spec/spec": "file:../../spec",
+    "yaml": "^2.8.1"
+  }
+}

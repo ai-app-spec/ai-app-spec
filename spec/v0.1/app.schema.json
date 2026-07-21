@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app-spec.ai/spec/v0.1/app.schema.json",
+  "type": "object",
+  "properties": {
+    "apiVersion": {
+      "$ref": "#/$defs/ApiVersion"
+    },
+    "kind": {
+      "$ref": "#/$defs/AppKind"
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "spec": {
+      "$ref": "#/$defs/AppSpec"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "additionalProperties": false,
+  "title": "AI App Manifest",
+  "description": "An AI App Spec version 0.1 manifest.",
+  "$defs": {
+    "ApiVersion": {
+      "type": "string",
+      "const": "app-spec.ai/v0.1"
+    },
+    "AppKind": {
+      "type": "string",
+      "const": "App"
+    },
+    "Metadata": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/SemanticVersion"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "Identifier": {
+      "type": "string",
+      "maxLength": 63,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "SemanticVersion": {
+      "type": "string",
+      "maxLength": 255,
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+    },
+    "AppSpec": {
+      "type": "object",
+      "properties": {
+        "entrypoint": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "resources": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AgentResource"
+          }
+        }
+      },
+      "required": [
+        "entrypoint",
+        "resources"
+      ],
+      "additionalProperties": false
+    },
+    "AgentResource": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "type": {
+          "type": "string",
+          "const": "agent"
+        },
+        "instructions": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "instructions"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
