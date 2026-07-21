@@ -12,7 +12,7 @@ This fragmentation is costly for everyone:
 - **AI application runtime providers** offer increasingly capable primitives, but lack a standard deployable unit that lets an ecosystem compose those primitives into complete products.
 - **Independent software vendors (ISVs)** repeatedly build undifferentiated infrastructure instead of concentrating on domain expertise, workflow design, and customer outcomes.
 
-Customers who want to consolidate on a governed AI platform are left with two poor choices: build each application themselves or commission a bespoke implementation. What is missing is a productized unit between a runtime primitive and a standalone SaaS application.
+Customers who want to consolidate on a governed AI platform are left with two poor choices: build each application themselves or commission a bespoke implementation. What is missing is a third option: an ecosystem of vendor-supported applications that install into the platform customers already trust.
 
 ## The vision
 
