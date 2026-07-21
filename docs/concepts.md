@@ -59,7 +59,7 @@ AI runtimes are converging on a common set of responsibilities even as their API
 | **Inference** | Declare required model capabilities or profiles. | Select models, hold provider credentials, route requests, enforce budgets, and handle availability policy. |
 | **Tools and connectors** | Declare callable capabilities and the external systems the app expects to reach. | Discover implementations, authenticate and authorize connections, validate inputs, mediate calls, and return typed results. |
 | **Skills and context** | Package or reference reusable instructions, domain knowledge, and context-loading behavior. | Resolve, index, scope, and load the right material into an execution. |
-| **Sessions, state, and memory** | Describe continuity requirements and the scopes in which state may be read or written. | Persist work contexts, isolate tenants and users, apply retention policy, and provide concurrency semantics. |
+| **Memory** | Declare persistent memory requirements and the scopes in which memory may be read or written. | Store, retrieve, and isolate memory while enforcing access, provenance, and retention policy. |
 | **Execution environment** | Declare code, filesystem, dependency, network, or isolation requirements. | Provision sandboxes or other logical isolation boundary, constrain resources and egress, collect outputs. |
 | **Automation and triggers** | Define events, retries, or conditions that initiate deferred and scheduled work. | Deliver triggers durably, control concurrency, retry safely, and record outcomes. |
 | **Artifacts** | Define durable inputs and outputs such as documents, files, generated assets, or structured results. | Store content and metadata, enforce access control, manage provenance and lifecycle. |
