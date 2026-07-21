@@ -27,6 +27,50 @@ describe("appManifestSchema", () => {
     expect(appManifestSchema.safeParse(manifest()).success).toBe(true);
   });
 
+  test("accepts SemVer prerelease and build metadata", () => {
+    for (const version of [
+      "1.2.3-alpha1",
+      "1.2.3-alpha.1",
+      "1.2.3-alpha.1+build.5",
+    ]) {
+      const input = manifest();
+      input.metadata.version = version;
+
+      expect(appManifestSchema.safeParse(input).success).toBe(true);
+    }
+  });
+
+  test("rejects malformed SemVer prereleases", () => {
+    for (const version of ["1.0.0-.", "1.0.0-alpha.", "1.0.0-01"]) {
+      const input = manifest();
+      input.metadata.version = version;
+
+      expect(appManifestSchema.safeParse(input).success).toBe(false);
+    }
+  });
+
+  test("limits identifiers to 63 characters", () => {
+    const accepted = manifest();
+    accepted.metadata.name = "a".repeat(63);
+
+    const rejected = manifest();
+    rejected.metadata.name = "a".repeat(64);
+
+    expect(appManifestSchema.safeParse(accepted).success).toBe(true);
+    expect(appManifestSchema.safeParse(rejected).success).toBe(false);
+  });
+
+  test("limits versions to 255 characters", () => {
+    const accepted = manifest();
+    accepted.metadata.version = `1.0.0-${"a".repeat(249)}`;
+
+    const rejected = manifest();
+    rejected.metadata.version = `1.0.0-${"a".repeat(250)}`;
+
+    expect(appManifestSchema.safeParse(accepted).success).toBe(true);
+    expect(appManifestSchema.safeParse(rejected).success).toBe(false);
+  });
+
   test("rejects duplicate resource ids", () => {
     const input = manifest();
     input.spec.resources.push({
@@ -66,4 +110,3 @@ describe("appManifestSchema", () => {
     expect(appManifestSchema.safeParse(input).success).toBe(false);
   });
 });
-

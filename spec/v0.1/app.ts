@@ -9,13 +9,15 @@ export const appKindSchema = z.literal("App").meta({ id: "AppKind" });
 
 export const identifierSchema = z
   .string()
+  .max(63)
   .regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/)
   .meta({ id: "Identifier" });
 
 export const semanticVersionSchema = z
   .string()
+  .max(255)
   .regex(
-    /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/,
+    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/,
   )
   .meta({ id: "SemanticVersion" });
 
