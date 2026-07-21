@@ -1,0 +1,15 @@
+apiVersion: app-spec.ai/v0.1
+kind: App
+metadata:
+  name: missing-file
+  version: 0.1.0
+spec:
+  entrypoint: greeter
+  resources:
+    - id: greeter
+      kind: Agent
+      implementation:
+        format: example.com/agent:v1
+        package:
+          location: ./packages/missing.pkg
+          digest: sha256:0000000000000000000000000000000000000000000000000000000000000000

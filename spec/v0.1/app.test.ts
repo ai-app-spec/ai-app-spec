@@ -6,7 +6,7 @@ function manifest() {
     apiVersion: "app-spec.ai/v0.1",
     kind: "App",
     metadata: {
-      name: "hello-world",
+      name: "hello-oci",
       version: "0.1.0",
     },
     spec: {
@@ -14,8 +14,15 @@ function manifest() {
       resources: [
         {
           id: "greeter",
-          type: "agent",
-          instructions: "Say hello.",
+          kind: "Agent",
+          implementation: {
+            format: "app-spec.ai/agent-container:v1",
+            package: {
+              location: "oci://registry.example.com/ai-app-spec/hello-oci",
+              digest:
+                "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            },
+          },
         },
       ],
     },
@@ -75,8 +82,15 @@ describe("appManifestSchema", () => {
     const input = manifest();
     input.spec.resources.push({
       id: "greeter",
-      type: "agent",
-      instructions: "Say hello again.",
+      kind: "Agent",
+      implementation: {
+        format: "app-spec.ai/agent-container:v1",
+        package: {
+          location: "oci://registry.example.com/ai-app-spec/other",
+          digest:
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        },
+      },
     });
 
     const result = appManifestSchema.safeParse(input);
@@ -106,6 +120,49 @@ describe("appManifestSchema", () => {
 
   test("rejects unknown fields", () => {
     const input = { ...manifest(), unknown: true };
+
+    expect(appManifestSchema.safeParse(input).success).toBe(false);
+  });
+
+  test("accepts a package-relative implementation location", () => {
+    const input = manifest();
+    input.spec.resources[0]!.implementation.package.location =
+      "./packages/greeter.agentpkg";
+
+    expect(appManifestSchema.safeParse(input).success).toBe(true);
+  });
+
+  test("rejects file URIs and package-relative traversal", () => {
+    for (const location of [
+      "file:///tmp/greeter",
+      "FILE:///tmp/greeter",
+      "C:\\packages\\greeter.txt",
+      "../greeter.txt",
+    ]) {
+      const input = manifest();
+      input.spec.resources[0]!.implementation.package.location = location;
+
+      const result = appManifestSchema.safeParse(input);
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.message).toBe(
+          "must be a package-relative path (./...) or an absolute URI",
+        );
+      }
+    }
+  });
+
+  test("rejects unnamespaced implementation formats", () => {
+    const input = manifest();
+    input.spec.resources[0]!.implementation.format = "agent:v1";
+
+    expect(appManifestSchema.safeParse(input).success).toBe(false);
+  });
+
+  test("rejects malformed package digests", () => {
+    const input = manifest();
+    input.spec.resources[0]!.implementation.package.digest = "sha256:abc123";
 
     expect(appManifestSchema.safeParse(input).success).toBe(false);
   });

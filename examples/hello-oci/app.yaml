@@ -1,0 +1,19 @@
+apiVersion: app-spec.ai/v0.1
+kind: App
+
+metadata:
+  name: hello-oci
+  version: 0.1.0
+  description: A minimal app referencing a dummy OCI agent image.
+
+spec:
+  entrypoint: greeter
+  resources:
+    - id: greeter
+      kind: Agent
+      implementation:
+        format: app-spec.ai/agent-container:v1
+        package:
+          location: oci://registry.example.com/ai-app-spec/hello-oci
+          # Placeholder only; this example does not publish an image.
+          digest: sha256:0000000000000000000000000000000000000000000000000000000000000000

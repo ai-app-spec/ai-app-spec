@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
-import { readFile, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { appManifestSchema } from "@ai-app-spec/spec/v0.1";
 import { parseDocument } from "yaml";
@@ -9,7 +10,11 @@ const manifestFilename = "app.yaml";
 
 function usage() {
   console.error(
-    "Usage: aiappctl validate --package=<bundle-directory|app.yaml>",
+    [
+      "Usage:",
+      "  aiappctl validate --package=<bundle-directory|app.yaml>",
+      "  aiappctl digest <file>",
+    ].join("\n"),
   );
 }
 
@@ -53,6 +58,64 @@ function formatIssue(issue) {
   return `${location}: ${issue.message}`;
 }
 
+function isWithin(directory, candidate) {
+  const relative = path.relative(directory, candidate);
+  return (
+    relative !== "" &&
+    !relative.startsWith(`..${path.sep}`) &&
+    relative !== ".." &&
+    !path.isAbsolute(relative)
+  );
+}
+
+async function validateLocalPackages(manifest, manifestPath) {
+  const packageRoot = await realpath(path.dirname(manifestPath));
+  const errors = [];
+
+  for (const [index, resource] of manifest.spec.resources.entries()) {
+    const descriptor = resource.implementation.package;
+    if (!descriptor.location.startsWith("./")) {
+      continue;
+    }
+
+    const issuePath = `/spec/resources/${index}/implementation/package`;
+    const unresolvedPath = path.resolve(packageRoot, descriptor.location);
+    let resolvedPath;
+
+    try {
+      resolvedPath = await realpath(unresolvedPath);
+    } catch {
+      errors.push(`${issuePath}/location: package does not exist`);
+      continue;
+    }
+
+    if (!isWithin(packageRoot, resolvedPath)) {
+      errors.push(
+        `${issuePath}/location: package resolves outside the app package`,
+      );
+      continue;
+    }
+
+    const packageStat = await stat(resolvedPath);
+    if (!packageStat.isFile()) {
+      errors.push(`${issuePath}/location: package must be a file`);
+      continue;
+    }
+
+    const bytes = await readFile(resolvedPath);
+    const actualDigest = `sha256:${createHash("sha256")
+      .update(bytes)
+      .digest("hex")}`;
+    if (actualDigest !== descriptor.digest) {
+      errors.push(
+        `${issuePath}/digest: expected ${descriptor.digest}, got ${actualDigest}`,
+      );
+    }
+  }
+
+  return errors;
+}
+
 async function validate(inputPath) {
   const manifestPath = await resolveManifestPath(inputPath);
   const manifestSource = await readFile(manifestPath, "utf8");
@@ -79,14 +142,39 @@ async function validate(inputPath) {
     };
   }
 
+  const packageErrors = await validateLocalPackages(result.data, manifestPath);
+
   return {
     manifestPath,
-    errors: [],
+    errors: packageErrors,
   };
+}
+
+async function digest(inputPath) {
+  const resolvedPath = path.resolve(inputPath);
+  const inputStat = await stat(resolvedPath);
+
+  if (!inputStat.isFile()) {
+    throw new Error(`not a file: ${inputPath}`);
+  }
+
+  const bytes = await readFile(resolvedPath);
+  return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 
 async function main() {
   const [command, ...args] = process.argv.slice(2);
+
+  if (command === "digest" && args.length === 1) {
+    try {
+      console.log(await digest(args[0]));
+    } catch (error) {
+      console.error(`aiappctl: ${error.message}`);
+      process.exitCode = 1;
+    }
+    return;
+  }
+
   const inputPath = parsePackageArgument(args);
 
   if (command !== "validate" || !inputPath) {

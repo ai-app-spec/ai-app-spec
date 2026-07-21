@@ -32,8 +32,12 @@ jobs:
         working-directory: src/aiappctl
         run: bun install --frozen-lockfile
 
+      - name: Test CLI
+        working-directory: src/aiappctl
+        run: bun test
+
       - name: Validate examples
         run: |
-          for bundle in examples/*/; do
-            bun ./src/aiappctl/cli.js validate --package="$bundle"
+          for app in examples/*/; do
+            bun ./src/aiappctl/cli.js validate --package="$app"
           done

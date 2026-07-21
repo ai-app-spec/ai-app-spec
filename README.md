@@ -18,7 +18,7 @@ Customers who want to consolidate on a governed AI platform are left with two po
 
 An AI app should be a portable, versioned package that declares everything a compatible runtime needs to instantiate useful behavior.
 
-An app package might compose agent instructions and skills, tool integrations, permissions, schedules, execution requirements, data and secret bindings, lifecycle hooks, and observability metadata. The package describes the application and its requirements; the runtime determines how to execute it securely and reliably using its native capabilities.
+An app package might compose packaged agent implementations and skills, tool integrations, permissions, schedules, execution requirements, data and secret bindings, lifecycle hooks, and observability metadata. It identifies implementation bytes without reproducing their internal agent or deployment logic; the runtime determines how to execute them securely and reliably using its native capabilities.
 
 The AI App Spec defines the contract between those two sides. It is not a new runtime and does not prescribe how providers implement one. It establishes a common unit that can be validated, installed, configured, upgraded, and removed across compatible runtimes.
 
@@ -68,3 +68,4 @@ AI App Spec is an early proposal. The first milestone is intentionally small, co
 ## Further reading
 
 - [Concepts: AI applications, packages, and runtimes](docs/concepts.md)
+- [Packaging agent implementations](docs/packaging.md)
