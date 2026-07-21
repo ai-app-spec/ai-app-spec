@@ -20,7 +20,7 @@
 
 ## The AI application runtime
 
-A model API turns input into output. An **AI application runtime** turns models, tools, instructions, state, compute, and policy into an application that people and other systems can use over time.
+An **AI application runtime** turns models, tools, instructions, state, compute, and policy into an application that people and other systems can use over time.
 
 The runtime is the governed environment in which an app operates. It authenticates actors, resolves and marshals configured resources, mediates access to models and external systems, executes attended and background work, persists state and outputs, and makes activity observable. A runtime may be a hosted product, an enterprise control plane, or a local implementation. The specification intends to be agnostic of the provider service topology.
 
