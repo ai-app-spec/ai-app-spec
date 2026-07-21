@@ -1,0 +1,31 @@
+name: Validate examples
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate example app packages
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.9
+
+      - name: Install CLI dependencies
+        working-directory: src/aiappctl
+        run: bun install --frozen-lockfile
+
+      - name: Validate examples
+        run: |
+          for bundle in examples/*/; do
+            bun ./src/aiappctl/cli.js validate "$bundle"
+          done

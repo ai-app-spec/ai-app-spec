@@ -1,0 +1,16 @@
+apiVersion: app-spec.ai/v0.1
+kind: App
+
+metadata:
+  name: hello-world
+  version: 0.1.0
+  description: A minimal AI app that greets the user.
+
+spec:
+  entrypoint: greeter
+  resources:
+    - id: greeter
+      type: agent
+      instructions: |
+        Respond with exactly: Hello, world!
+
