@@ -44,7 +44,7 @@ An open specification gives customers confidence that applications are inspectab
 
 Portability does not require reducing every runtime to the lowest common denominator. The specification should define a useful common core, explicit capability negotiation, and namespaced provider extensions. An app can be broadly portable where the ecosystem agrees and intentionally provider-specific where it benefits from unique runtime capabilities.
 
-Earlier platform shifts had analogous deployable units: application archives for app servers, charts for Kubernetes, and managed packages for SaaS platforms. AI runtimes need their own unit of composition. Protocols such as MCP make tools available to models; the AI App Spec describes how tools and other resources form an installable application.
+Earlier platform shifts had analogous deployable units: application archives for app servers, Helm charts for Kubernetes, and managed packages for SaaS platforms. AI runtimes need their own unit of composition. Protocols such as MCP make tools available to models; the AI App Spec describes how tools and other resources form an installable application.
 
 ## Design principles
 
