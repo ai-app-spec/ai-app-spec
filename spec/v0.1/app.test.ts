@@ -15,7 +15,14 @@ function manifest() {
         {
           id: "greeter",
           type: "agent",
-          instructions: "Say hello.",
+          implementation: {
+            format: "example.app-spec.ai/text-agent:v1",
+            package: {
+              location: "./packages/greeter.txt",
+              digest:
+                "sha256:79d710e9d44e7ad62b2c570b6a3d60f1655a5e0e7a7527f3559756ed67e3ef21",
+            },
+          },
         },
       ],
     },
@@ -76,7 +83,14 @@ describe("appManifestSchema", () => {
     input.spec.resources.push({
       id: "greeter",
       type: "agent",
-      instructions: "Say hello again.",
+      implementation: {
+        format: "example.app-spec.ai/text-agent:v1",
+        package: {
+          location: "./packages/other.txt",
+          digest:
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        },
+      },
     });
 
     const result = appManifestSchema.safeParse(input);
@@ -106,6 +120,42 @@ describe("appManifestSchema", () => {
 
   test("rejects unknown fields", () => {
     const input = { ...manifest(), unknown: true };
+
+    expect(appManifestSchema.safeParse(input).success).toBe(false);
+  });
+
+  test("accepts an absolute implementation package URI", () => {
+    const input = manifest();
+    input.spec.resources[0]!.implementation.package.location =
+      "oci://ghcr.io/example/greeter";
+
+    expect(appManifestSchema.safeParse(input).success).toBe(true);
+  });
+
+  test("rejects file URIs and package-relative traversal", () => {
+    for (const location of [
+      "file:///tmp/greeter",
+      "FILE:///tmp/greeter",
+      "C:\\packages\\greeter.txt",
+      "../greeter.txt",
+    ]) {
+      const input = manifest();
+      input.spec.resources[0]!.implementation.package.location = location;
+
+      expect(appManifestSchema.safeParse(input).success).toBe(false);
+    }
+  });
+
+  test("rejects unnamespaced implementation formats", () => {
+    const input = manifest();
+    input.spec.resources[0]!.implementation.format = "text-agent:v1";
+
+    expect(appManifestSchema.safeParse(input).success).toBe(false);
+  });
+
+  test("rejects malformed package digests", () => {
+    const input = manifest();
+    input.spec.resources[0]!.implementation.package.digest = "sha256:abc123";
 
     expect(appManifestSchema.safeParse(input).success).toBe(false);
   });

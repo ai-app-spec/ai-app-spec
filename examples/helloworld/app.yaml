@@ -11,6 +11,8 @@ spec:
   resources:
     - id: greeter
       type: agent
-      instructions: |
-        Respond with exactly: Hello, world!
-
+      implementation:
+        format: example.app-spec.ai/text-agent:v1
+        package:
+          location: ./packages/greeter.txt
+          digest: sha256:57ed92edff67e804cb81d661af4c3b7cd33bfdb72af9a63ac7cc456322d04e6e

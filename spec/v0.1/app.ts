@@ -29,11 +29,58 @@ export const metadataSchema = z
   })
   .meta({ id: "Metadata" });
 
+export const implementationFormatSchema = z
+  .string()
+  .max(255)
+  .regex(
+    /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*:v(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,2}$/,
+  )
+  .meta({ id: "ImplementationFormat" });
+
+export const packageRelativeLocationSchema = z
+  .string()
+  .max(2048)
+  .regex(
+    /^\.\/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?(?:\/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)*$/,
+  )
+  .meta({ id: "PackageRelativeLocation" });
+
+export const absolutePackageLocationSchema = z
+  .string()
+  .max(2048)
+  .regex(
+    /^(?![Ff][Ii][Ll][Ee]:)(?![A-Za-z]:[\\/])[A-Za-z][A-Za-z0-9+.-]*:[^\s\\]+$/,
+  )
+  .meta({ id: "AbsolutePackageLocation" });
+
+export const packageLocationSchema = z
+  .union([packageRelativeLocationSchema, absolutePackageLocationSchema])
+  .meta({ id: "PackageLocation" });
+
+export const sha256DigestSchema = z
+  .string()
+  .regex(/^sha256:[0-9a-f]{64}$/)
+  .meta({ id: "Sha256Digest" });
+
+export const implementationPackageSchema = z
+  .strictObject({
+    location: packageLocationSchema,
+    digest: sha256DigestSchema,
+  })
+  .meta({ id: "ImplementationPackage" });
+
+export const agentImplementationSchema = z
+  .strictObject({
+    format: implementationFormatSchema,
+    package: implementationPackageSchema,
+  })
+  .meta({ id: "AgentImplementation" });
+
 export const agentResourceSchema = z
   .strictObject({
     id: identifierSchema,
     type: z.literal("agent"),
-    instructions: z.string().min(1),
+    implementation: agentImplementationSchema,
   })
   .meta({ id: "AgentResource" });
 

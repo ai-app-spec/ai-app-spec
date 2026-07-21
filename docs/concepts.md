@@ -54,7 +54,7 @@ AI runtimes are converging on a common set of responsibilities even as their API
 
 | Primitive | App-level intent | Runtime responsibility |
 | --- | --- | --- |
-| **Agents** | Define model-directed behavior, including roles, instructions, callable capabilities, input and output contracts, and delegation boundaries. | Create agent execution contexts, provide scoped access to models and tools, maintain context, and manage limits or interruption, attach to logs and execution telemetry. |
+| **Agents** | Identify a packaged agent implementation and its portable invocation contract. | Resolve a supported package format, instantiate the implementation, provide scoped access to runtime capabilities, and manage execution, limits, interruption, and telemetry. |
 | **Workflows** | Define explicit coordination among agent, tool, human, and deterministic steps, including ordering, branching, and data flow. | Orchestrate steps, persist progress, pass data between them, and enforce retry, timeout, concurrency, and failure policies. |
 | **Inference** | Declare required model capabilities or profiles. | Select models, hold provider credentials, route requests, enforce budgets, and handle availability policy. |
 | **Tools and connectors** | Declare callable capabilities and the external systems the app expects to reach. | Discover implementations, authenticate and authorize connections, validate inputs, mediate calls, and return typed results. |
@@ -74,12 +74,28 @@ An app is a graph of resources and references whose edges express dependencies: 
 
 Resources can come from different places:
 
-- **Packaged resources** travel with the app, such as instructions, schemas, or static skill content.
+- **Packaged resources** travel with the app, such as implementation packages, schemas, or static skill content.
 - **Runtime resources** are supplied by the provider, such as model profiles, sandbox classes, storage, or native interaction surfaces.
 - **Bound resources** are selected by the installing organization, such as an app connection, knowledge source, identity group, or secret.
 - **External resources** remain outside the runtime but are reached through a governed connector or protocol.
 
 The package identifies and references resources using stable logical names. The runtime provider resolves the graph for each installation and maintains the mapping between portable identifiers and provider-native object identifiers.
+
+## Implementation packages
+
+The app manifest does not reproduce an agent's logic, framework configuration, dependencies, or deployment procedure. An agent resource instead identifies an immutable implementation package using:
+
+- a namespaced, versioned **format** that selects a compatible runtime adapter
+- a **location** that is either package-relative or an absolute URI
+- a content **digest** that establishes identity and integrity
+
+The package format defines how its bytes are interpreted. A portable container format can use an OCI image together with a standard agent invocation contract. Provider-native formats can package concepts such as a managed-agent definition without adding their fields to the core app schema. Implementations built with agent frameworks can be distributed through either kind of format.
+
+Package-relative locations resolve only within the app package. Absolute filesystem paths and `file:` URIs are not portable package references. External locations remain subject to runtime resolution and admission policy.
+
+The specification does not define container construction or isolation, compute allocation, placement, scaling, warm capacity, or provider deployment topology. Those are runtime and operator concerns. An app may eventually declare portable capability requirements, but cannot commit runtime resources through its implementation descriptor.
+
+See [Packaging agent implementations](packaging.md) for the canonical OCI package direction and the role of provider- and framework-format adapters.
 
 ## Runtime provider bindings
 
@@ -104,6 +120,7 @@ The package is responsible for declaring:
 
 - app identity, version, and compatibility information
 - the logical resource graph and its entry points
+- immutable implementation packages, their formats, locations, and digests
 - required and optional runtime capabilities
 - typed configuration and secret requirements
 - requested permissions and human-approval points
@@ -122,6 +139,7 @@ The runtime (runtime provider) is responsible for:
 
 - validating the package and resolving its capabilities before mutations are committed
 - translating logical resources into provider-native resources
+- resolving implementation packages through supported format adapters
 - securely storing configuration, bindings, credentials, and state
 - enforcing identity, authorization, approval, isolation, and resource policy
 - reconciling the installation toward its declared state
@@ -157,7 +175,7 @@ Deployment must be convergent (applying the same package and config does not cre
 
 ## Security and trust
 
-App packages may contain executable instructions, request access to sensitive systems, and cause long-running or autonomous work. The runtime must treat package content as untrusted input while still giving operators enough information to make informed decisions.
+App packages may contain untrusted executable code or provider-native definitions, request access to sensitive systems, and cause long-running or autonomous work. The runtime must treat package content as untrusted input while still giving operators enough information to make informed decisions.
 
 - Permission requests are explicit, reviewable, least-privilege, and denied until granted.
 - The initiating user, service, or schedule remains attributable through delegated work and tool calls. Ambient runtime credentials must not erase the acting principal.

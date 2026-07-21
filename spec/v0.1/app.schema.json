@@ -94,17 +94,77 @@
           "type": "string",
           "const": "agent"
         },
-        "instructions": {
-          "type": "string",
-          "minLength": 1
+        "implementation": {
+          "$ref": "#/$defs/AgentImplementation"
         }
       },
       "required": [
         "id",
         "type",
-        "instructions"
+        "implementation"
       ],
       "additionalProperties": false
+    },
+    "AgentImplementation": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "$ref": "#/$defs/ImplementationFormat"
+        },
+        "package": {
+          "$ref": "#/$defs/ImplementationPackage"
+        }
+      },
+      "required": [
+        "format",
+        "package"
+      ],
+      "additionalProperties": false
+    },
+    "ImplementationFormat": {
+      "type": "string",
+      "maxLength": 255,
+      "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*:v(?:0|[1-9]\\d*)(?:\\.(?:0|[1-9]\\d*)){0,2}$"
+    },
+    "ImplementationPackage": {
+      "type": "object",
+      "properties": {
+        "location": {
+          "$ref": "#/$defs/PackageLocation"
+        },
+        "digest": {
+          "$ref": "#/$defs/Sha256Digest"
+        }
+      },
+      "required": [
+        "location",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "PackageLocation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PackageRelativeLocation"
+        },
+        {
+          "$ref": "#/$defs/AbsolutePackageLocation"
+        }
+      ]
+    },
+    "PackageRelativeLocation": {
+      "type": "string",
+      "maxLength": 2048,
+      "pattern": "^\\.\\/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?(?:\\/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)*$"
+    },
+    "AbsolutePackageLocation": {
+      "type": "string",
+      "maxLength": 2048,
+      "pattern": "^(?![Ff][Ii][Ll][Ee]:)(?![A-Za-z]:[\\\\/])[A-Za-z][A-Za-z0-9+.-]*:[^\\s\\\\]+$"
+    },
+    "Sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
     }
   }
 }
