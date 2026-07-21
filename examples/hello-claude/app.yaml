@@ -14,5 +14,5 @@ spec:
       implementation:
         format: anthropic.com/managed-agent:v1
         package:
-          location: ./packages/greeter.agentpkg
-          digest: sha256:1ea49d045b0bf85c35366986dbd37212979b1013c36a58df86b340d694a7ae47
+          location: ./packages/greeter.agentpkg.yaml
+          digest: sha256:905c260e6fcb4377adb897dfc26055e28ce6e8cf989a96cabbaf229ec8682e40
