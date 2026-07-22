@@ -92,6 +92,18 @@ describe("aiappctl", () => {
     );
   });
 
+  test("validates an Agent using an MCPServer", async () => {
+    const result = await run(
+      "validate",
+      "--package",
+      path.join(examplesPath, "product-manager-claude"),
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("app.yaml is valid");
+    expect(result.stderr).toBe("");
+  });
+
   test("deploys an Anthropic Managed Agent package", async () => {
     let request;
     const originalFetch = globalThis.fetch;

@@ -118,6 +118,92 @@ describe("appManifestSchema", () => {
     }
   });
 
+  test("accepts an Agent using an MCPServer", () => {
+    const input: any = manifest();
+    input.spec.resources[0].tools = [{ ref: "linear" }];
+    input.spec.resources.push({
+      id: "linear",
+      kind: "MCPServer",
+      connection: {
+        type: "url",
+        url: "https://mcp.linear.app/mcp",
+      },
+    });
+
+    expect(appManifestSchema.safeParse(input).success).toBe(true);
+  });
+
+  test("rejects an MCPServer as the entrypoint", () => {
+    const input: any = manifest();
+    input.spec.entrypoint = "linear";
+    input.spec.resources.push({
+      id: "linear",
+      kind: "MCPServer",
+      connection: {
+        type: "url",
+        url: "https://mcp.linear.app/mcp",
+      },
+    });
+
+    const result = appManifestSchema.safeParse(input);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.path).toEqual(["spec", "entrypoint"]);
+      expect(result.error.issues[0]?.message).toBe(
+        "resource 'linear' is not an Agent",
+      );
+    }
+  });
+
+  test("rejects unresolved, mistyped, and duplicate tool references", () => {
+    const input: any = manifest();
+    input.spec.resources[0].tools = [
+      { ref: "missing" },
+      { ref: "greeter" },
+      { ref: "missing" },
+    ];
+
+    const result = appManifestSchema.safeParse(input);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.message)).toEqual([
+        "resource 'missing' does not exist",
+        "resource 'greeter' is not an MCPServer",
+        "duplicate tool resource reference 'missing'",
+      ]);
+    }
+  });
+
+  test("requires secure MCPServer endpoint URLs", () => {
+    for (const url of [
+      "http://mcp.linear.app/mcp",
+      "https://user:password@mcp.linear.app/mcp",
+      "https://mcp.linear.app/mcp#tools",
+    ]) {
+      const input: any = manifest();
+      input.spec.resources.push({
+        id: "linear",
+        kind: "MCPServer",
+        connection: { type: "url", url },
+      });
+
+      const result = appManifestSchema.safeParse(input);
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.path).toEqual([
+          "spec",
+          "resources",
+          1,
+          "connection",
+          "url",
+        ]);
+      }
+    }
+  });
+
   test("rejects unknown fields", () => {
     const input = { ...manifest(), unknown: true };
 

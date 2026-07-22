@@ -78,15 +78,63 @@ export const agentImplementationSchema = z
   })
   .meta({ id: "AgentImplementation" });
 
+export const resourceReferenceSchema = z
+  .strictObject({
+    ref: identifierSchema,
+  })
+  .meta({ id: "ResourceReference" });
+
 export const agentResourceSchema = z
   .strictObject({
     id: identifierSchema,
     kind: z.literal("Agent"),
+    tools: z.array(resourceReferenceSchema).min(1).optional(),
     implementation: agentImplementationSchema,
   })
   .meta({ id: "AgentResource" });
 
-export const resourceSchema = agentResourceSchema;
+export const mcpServerUrlSchema = z
+  .intersection(
+    z.url(),
+    z.string().max(2048).regex(/^https:\/\//),
+  )
+  .superRefine((value, context) => {
+    const url = new URL(value);
+
+    if (url.username || url.password) {
+      context.addIssue({
+        code: "custom",
+        message: "must not contain embedded credentials",
+      });
+    }
+
+    if (url.hash) {
+      context.addIssue({
+        code: "custom",
+        message: "must not contain a fragment",
+      });
+    }
+  })
+  .meta({ id: "MCPServerUrl" });
+
+export const mcpServerConnectionSchema = z
+  .strictObject({
+    type: z.literal("url"),
+    url: mcpServerUrlSchema,
+  })
+  .meta({ id: "MCPServerConnection" });
+
+export const mcpServerResourceSchema = z
+  .strictObject({
+    id: identifierSchema,
+    kind: z.literal("MCPServer"),
+    connection: mcpServerConnectionSchema,
+  })
+  .meta({ id: "MCPServerResource" });
+
+export const resourceSchema = z
+  .discriminatedUnion("kind", [agentResourceSchema, mcpServerResourceSchema])
+  .meta({ id: "Resource" });
 
 export const appSpecSchema = z
   .strictObject({
@@ -109,25 +157,79 @@ export const appManifestStructuralSchema = z
 
 export const appManifestSchema = appManifestStructuralSchema.superRefine(
   (manifest, context) => {
-    const resourceIds = new Set<string>();
+    const resourcesById = new Map<
+      string,
+      (typeof manifest.spec.resources)[number]
+    >();
 
     for (const [index, resource] of manifest.spec.resources.entries()) {
-      if (resourceIds.has(resource.id)) {
+      if (resourcesById.has(resource.id)) {
         context.addIssue({
           code: "custom",
           path: ["spec", "resources", index, "id"],
           message: `duplicate resource id '${resource.id}'`,
         });
+      } else {
+        resourcesById.set(resource.id, resource);
       }
-      resourceIds.add(resource.id);
     }
 
-    if (!resourceIds.has(manifest.spec.entrypoint)) {
+    const entrypoint = resourcesById.get(manifest.spec.entrypoint);
+    if (!entrypoint) {
       context.addIssue({
         code: "custom",
         path: ["spec", "entrypoint"],
         message: `resource '${manifest.spec.entrypoint}' does not exist`,
       });
+    } else if (entrypoint.kind !== "Agent") {
+      context.addIssue({
+        code: "custom",
+        path: ["spec", "entrypoint"],
+        message: `resource '${manifest.spec.entrypoint}' is not an Agent`,
+      });
+    }
+
+    for (const [resourceIndex, resource] of manifest.spec.resources.entries()) {
+      if (resource.kind !== "Agent" || !resource.tools) {
+        continue;
+      }
+
+      const toolReferences = new Set<string>();
+      for (const [toolIndex, tool] of resource.tools.entries()) {
+        const path = [
+          "spec",
+          "resources",
+          resourceIndex,
+          "tools",
+          toolIndex,
+          "ref",
+        ];
+
+        if (toolReferences.has(tool.ref)) {
+          context.addIssue({
+            code: "custom",
+            path,
+            message: `duplicate tool resource reference '${tool.ref}'`,
+          });
+          continue;
+        }
+        toolReferences.add(tool.ref);
+
+        const target = resourcesById.get(tool.ref);
+        if (!target) {
+          context.addIssue({
+            code: "custom",
+            path,
+            message: `resource '${tool.ref}' does not exist`,
+          });
+        } else if (target.kind !== "MCPServer") {
+          context.addIssue({
+            code: "custom",
+            path,
+            message: `resource '${tool.ref}' is not an MCPServer`,
+          });
+        }
+      }
     }
   },
 );

@@ -74,7 +74,7 @@
           "minItems": 1,
           "type": "array",
           "items": {
-            "$ref": "#/$defs/AgentResource"
+            "$ref": "#/$defs/Resource"
           }
         }
       },
@@ -83,6 +83,16 @@
         "resources"
       ],
       "additionalProperties": false
+    },
+    "Resource": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/AgentResource"
+        },
+        {
+          "$ref": "#/$defs/MCPServerResource"
+        }
+      ]
     },
     "AgentResource": {
       "type": "object",
@@ -94,6 +104,13 @@
           "type": "string",
           "const": "Agent"
         },
+        "tools": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResourceReference"
+          }
+        },
         "implementation": {
           "$ref": "#/$defs/AgentImplementation"
         }
@@ -102,6 +119,18 @@
         "id",
         "kind",
         "implementation"
+      ],
+      "additionalProperties": false
+    },
+    "ResourceReference": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "ref"
       ],
       "additionalProperties": false
     },
@@ -165,6 +194,57 @@
     "Sha256Digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "MCPServerResource": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "kind": {
+          "type": "string",
+          "const": "MCPServer"
+        },
+        "connection": {
+          "$ref": "#/$defs/MCPServerConnection"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "connection"
+      ],
+      "additionalProperties": false
+    },
+    "MCPServerConnection": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "url"
+        },
+        "url": {
+          "$ref": "#/$defs/MCPServerUrl"
+        }
+      },
+      "required": [
+        "type",
+        "url"
+      ],
+      "additionalProperties": false
+    },
+    "MCPServerUrl": {
+      "allOf": [
+        {
+          "type": "string",
+          "format": "uri"
+        },
+        {
+          "type": "string",
+          "maxLength": 2048,
+          "pattern": "^https:\\/\\/"
+        }
+      ]
     }
   }
 }
