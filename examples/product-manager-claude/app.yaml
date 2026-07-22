@@ -1,0 +1,26 @@
+apiVersion: app-spec.ai/v0.1
+kind: App
+
+metadata:
+  name: product-manager-claude
+  version: 0.1.0
+  description: Synthesizes product insights from connected customer and product data.
+
+spec:
+  entrypoint: product-manager
+  resources:
+    - id: product-manager
+      kind: Agent
+      tools:
+        - ref: linear
+      implementation:
+        format: anthropic.com/managed-agent:v1
+        package:
+          location: ./packages/product-manager.agentpkg.yaml
+          digest: sha256:cdc449575aea61f43741f4a835d4b2438ca9369e2547cdb9159bc0ebba24aa15
+
+    - id: linear
+      kind: MCPServer
+      connection:
+        type: url
+        url: https://mcp.linear.app/mcp

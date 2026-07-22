@@ -17,6 +17,26 @@ The canonical archive encoding will be ZIP, whose archive root has the same layo
 
 The current schema supports `Agent` and `MCPServer` resources. An agent identifies its implementation with a namespaced format and an immutable package descriptor. A package location may be relative to the app bundle or an absolute URI; `file:` URIs are not portable and are rejected. The format's runtime adapter owns interpretation of the package contents.
 
+An agent can reference URL-backed MCP servers through its `tools` field. MCP server URLs must use HTTPS and must not contain embedded credentials or fragments. Tool references are validated within the app manifest, while authentication and live server capability discovery are deferred to the runtime.
+
+```yaml
+resources:
+  - id: product-manager
+    kind: Agent
+    tools:
+      - ref: linear
+    implementation:
+      format: anthropic.com/managed-agent:v1
+      package:
+        location: ./packages/product-manager.agentpkg.yaml
+        digest: sha256:...
+  - id: linear
+    kind: MCPServer
+    connection:
+      type: url
+      url: https://mcp.linear.app/mcp
+```
+
 The specification does not define build inputs, container implementation details, deployment topology, scaling, or resource-allocation policy. These remain responsibilities of tooling and the target runtime.
 
 Generate and test the specification:
