@@ -38,3 +38,15 @@ bun install
 bun run validate --package=../../examples/hello-oci
 bun ./cli.js digest ../../examples/hello-claude/packages/greeter.agentpkg.yaml
 ```
+
+Deploy the Claude Managed Agents example:
+
+```sh
+cd src/aiappctl
+export ANTHROPIC_API_KEY="your-api-key"
+bun run deploy --runtime claude --package=../../examples/hello-claude
+```
+
+`deploy` selects a provider adapter from each Agent resource's implementation format. The only currently supported runtime is `claude`, which accepts `anthropic.com/managed-agent:v1` packages stored inside the app bundle. The adapter parses the package YAML and sends it to Anthropic's `POST /v1/agents` endpoint using the Managed Agents beta API. Every Agent resource must use that format when `--runtime claude` is selected; deployment fails during preflight if any resource declares a different format.
+
+This initial implementation creates Agent resources only. It does not yet create environments or sessions, persist deployment state, reconcile an existing Agent, or resolve external package locations. Each successful command invocation therefore creates a new Managed Agent. All resources are validated and locally prepared before the first API request, but provider failures can still leave resources created earlier in a multi-resource app; their IDs are reported on stderr.
