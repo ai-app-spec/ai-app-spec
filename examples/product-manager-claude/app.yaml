@@ -12,9 +12,14 @@ spec:
     secrets:
       - id: linear-access-token
         description: Linear API key for the Linear MCP server.
+    executionEnvironments:
+      - id: product-manager-sandbox
+        description: Isolated sandbox able to reach the agent's declared MCP servers.
   resources:
     - id: product-manager
       kind: Agent
+      executionEnvironment:
+        ref: product-manager-sandbox
       tools:
         - ref: linear
       implementation:

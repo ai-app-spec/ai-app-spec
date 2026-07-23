@@ -97,16 +97,42 @@ export const secretRequirementSchema = z
   })
   .meta({ id: "SecretRequirement" });
 
-export const requirementsSchema = z
+export const executionEnvironmentReferenceSchema = z
   .strictObject({
-    secrets: z.array(secretRequirementSchema).min(1),
+    ref: identifierSchema,
   })
+  .meta({ id: "ExecutionEnvironmentReference" });
+
+export const executionEnvironmentRequirementSchema = z
+  .strictObject({
+    id: identifierSchema,
+    description: z.string().min(1).optional(),
+  })
+  .meta({ id: "ExecutionEnvironmentRequirement" });
+
+export const requirementsSchema = z
+  .union([
+    z.strictObject({
+      secrets: z.array(secretRequirementSchema).min(1),
+      executionEnvironments: z
+        .array(executionEnvironmentRequirementSchema)
+        .min(1)
+        .optional(),
+    }),
+    z.strictObject({
+      secrets: z.array(secretRequirementSchema).min(1).optional(),
+      executionEnvironments: z
+        .array(executionEnvironmentRequirementSchema)
+        .min(1),
+    }),
+  ])
   .meta({ id: "Requirements" });
 
 export const agentResourceSchema = z
   .strictObject({
     id: identifierSchema,
     kind: z.literal("Agent"),
+    executionEnvironment: executionEnvironmentReferenceSchema.optional(),
     tools: z.array(resourceReferenceSchema).min(1).optional(),
     implementation: agentImplementationSchema,
   })
@@ -191,7 +217,17 @@ export const appManifestSchema = appManifestStructuralSchema.superRefine(
     >();
     const secretsById = new Map<
       string,
-      NonNullable<typeof manifest.spec.requirements>["secrets"][number]
+      NonNullable<
+        NonNullable<typeof manifest.spec.requirements>["secrets"]
+      >[number]
+    >();
+    const executionEnvironmentsById = new Map<
+      string,
+      NonNullable<
+        NonNullable<
+          typeof manifest.spec.requirements
+        >["executionEnvironments"]
+      >[number]
     >();
 
     for (const [index, secret] of (
@@ -205,6 +241,29 @@ export const appManifestSchema = appManifestStructuralSchema.superRefine(
         });
       } else {
         secretsById.set(secret.id, secret);
+      }
+    }
+
+    for (const [index, executionEnvironment] of (
+      manifest.spec.requirements?.executionEnvironments || []
+    ).entries()) {
+      if (executionEnvironmentsById.has(executionEnvironment.id)) {
+        context.addIssue({
+          code: "custom",
+          path: [
+            "spec",
+            "requirements",
+            "executionEnvironments",
+            index,
+            "id",
+          ],
+          message: `duplicate execution environment requirement id '${executionEnvironment.id}'`,
+        });
+      } else {
+        executionEnvironmentsById.set(
+          executionEnvironment.id,
+          executionEnvironment,
+        );
       }
     }
 
@@ -260,7 +319,28 @@ export const appManifestSchema = appManifestStructuralSchema.superRefine(
 
       // TODO(resource-dispatch): Move Agent reference checks into a
       // kind-specific semantic validator instead of branching over all resources.
-      if (resource.kind !== "Agent" || !resource.tools) {
+      if (resource.kind !== "Agent") {
+        continue;
+      }
+
+      if (
+        resource.executionEnvironment &&
+        !executionEnvironmentsById.has(resource.executionEnvironment.ref)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: [
+            "spec",
+            "resources",
+            resourceIndex,
+            "executionEnvironment",
+            "ref",
+          ],
+          message: `execution environment requirement '${resource.executionEnvironment.ref}' does not exist`,
+        });
+      }
+
+      if (!resource.tools) {
         continue;
       }
 
