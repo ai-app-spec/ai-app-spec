@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { parseDocument } from "yaml";
+import { verifyClaudeEnvironment } from "./claude/environment.js";
 import { verifyClaudeVault } from "./claude/vault.js";
 
 const ANTHROPIC_MANAGED_AGENT_FORMAT = "anthropic.com/managed-agent:v1";
@@ -238,14 +239,27 @@ async function deployToClaude(validation, options) {
   const adapterOptions = {
     apiKey,
     baseUrl: options.baseUrl || ANTHROPIC_BASE_URL,
+    environmentId: options.environmentId,
     vaultId: options.vaultId,
   };
+  let environment;
+  try {
+    environment = await verifyClaudeEnvironment(validation, adapterOptions);
+  } catch (error) {
+    return {
+      manifestPath: validation.manifestPath,
+      deployed: [],
+      errors: [error.message],
+    };
+  }
+
   let vault;
   try {
     vault = await verifyClaudeVault(validation, adapterOptions);
   } catch (error) {
     return {
       manifestPath: validation.manifestPath,
+      environment,
       vault: error.vault,
       deployed: [],
       errors: [error.message],
@@ -269,6 +283,7 @@ async function deployToClaude(validation, options) {
     } catch (error) {
       return {
         manifestPath: validation.manifestPath,
+        environment,
         vault,
         deployed,
         errors: [error.message],
@@ -278,6 +293,7 @@ async function deployToClaude(validation, options) {
 
   return {
     manifestPath: validation.manifestPath,
+    environment,
     vault,
     deployed,
     errors: [],

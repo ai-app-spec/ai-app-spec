@@ -88,22 +88,72 @@
       "additionalProperties": false
     },
     "Requirements": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "secrets": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SecretRequirement"
+              }
+            },
+            "executionEnvironments": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExecutionEnvironmentRequirement"
+              }
+            }
+          },
+          "required": [
+            "secrets"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "secrets": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SecretRequirement"
+              }
+            },
+            "executionEnvironments": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExecutionEnvironmentRequirement"
+              }
+            }
+          },
+          "required": [
+            "executionEnvironments"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SecretRequirement": {
       "type": "object",
       "properties": {
-        "secrets": {
-          "minItems": 1,
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SecretRequirement"
-          }
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": [
-        "secrets"
+        "id"
       ],
       "additionalProperties": false
     },
-    "SecretRequirement": {
+    "ExecutionEnvironmentRequirement": {
       "type": "object",
       "properties": {
         "id": {
@@ -139,6 +189,9 @@
           "type": "string",
           "const": "Agent"
         },
+        "executionEnvironment": {
+          "$ref": "#/$defs/ExecutionEnvironmentReference"
+        },
         "tools": {
           "minItems": 1,
           "type": "array",
@@ -154,6 +207,18 @@
         "id",
         "kind",
         "implementation"
+      ],
+      "additionalProperties": false
+    },
+    "ExecutionEnvironmentReference": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "ref"
       ],
       "additionalProperties": false
     },

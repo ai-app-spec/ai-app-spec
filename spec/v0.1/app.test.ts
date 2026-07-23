@@ -160,6 +160,53 @@ describe("appManifestSchema", () => {
     expect(appManifestSchema.safeParse(input).success).toBe(true);
   });
 
+  test("accepts an Agent with an execution environment requirement", () => {
+    const input: any = manifest();
+    input.spec.requirements = {
+      executionEnvironments: [
+        {
+          id: "agent-sandbox",
+          description: "Isolated sandbox for agent execution.",
+        },
+      ],
+    };
+    input.spec.resources[0].executionEnvironment = {
+      ref: "agent-sandbox",
+    };
+
+    expect(appManifestSchema.safeParse(input).success).toBe(true);
+  });
+
+  test("rejects empty requirements", () => {
+    const input: any = manifest();
+    input.spec.requirements = {};
+
+    expect(appManifestSchema.safeParse(input).success).toBe(false);
+  });
+
+  test("rejects unresolved and duplicate execution environment requirements", () => {
+    const input: any = manifest();
+    input.spec.requirements = {
+      executionEnvironments: [
+        { id: "agent-sandbox" },
+        { id: "agent-sandbox" },
+      ],
+    };
+    input.spec.resources[0].executionEnvironment = {
+      ref: "missing-sandbox",
+    };
+
+    const result = appManifestSchema.safeParse(input);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.message)).toEqual([
+        "duplicate execution environment requirement id 'agent-sandbox'",
+        "execution environment requirement 'missing-sandbox' does not exist",
+      ]);
+    }
+  });
+
   test("rejects unresolved and duplicate secret requirements", () => {
     const input: any = manifest();
     input.spec.requirements = {
