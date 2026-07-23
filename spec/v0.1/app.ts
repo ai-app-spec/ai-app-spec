@@ -175,6 +175,8 @@ export const appManifestSchema = appManifestStructuralSchema.superRefine(
     }
 
     const entrypoint = resourcesById.get(manifest.spec.entrypoint);
+    // TODO(resource-dispatch): Revisit the Agent-only entrypoint constraint when
+    // resource kinds have explicit execution semantics.
     if (!entrypoint) {
       context.addIssue({
         code: "custom",
@@ -190,6 +192,8 @@ export const appManifestSchema = appManifestStructuralSchema.superRefine(
     }
 
     for (const [resourceIndex, resource] of manifest.spec.resources.entries()) {
+      // TODO(resource-dispatch): Move Agent reference checks into a
+      // kind-specific semantic validator instead of branching over all resources.
       if (resource.kind !== "Agent" || !resource.tools) {
         continue;
       }

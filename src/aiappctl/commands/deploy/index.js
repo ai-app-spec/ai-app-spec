@@ -86,6 +86,12 @@ export async function deploy(validation, options = {}) {
 
   const formatErrors = validation.manifest.spec.resources.flatMap(
     (resource) => {
+      // TODO(resource-dispatch): Delegate preflight to kind-specific deployers
+      // instead of filtering a heterogeneous resource collection here.
+      if (resource.kind !== "Agent") {
+        return [];
+      }
+
       const format = resource.implementation.format;
       if (runtime.formats.has(format)) {
         return [];
