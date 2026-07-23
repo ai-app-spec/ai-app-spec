@@ -14,7 +14,7 @@ function usage() {
     [
       "Usage:",
       "  aiappctl validate --package=<bundle-directory|app.yaml>",
-      "  aiappctl deploy --runtime <claude> --package=<bundle-directory|app.yaml> [--environment-id <id>] [--vault-id <id>]",
+      "  aiappctl deploy --runtime <claude|gemini> --package=<bundle-directory|app.yaml> [--project <google-cloud-project>] [--environment-id <id>] [--vault-id <id>]",
       "  aiappctl digest <file>",
     ].join("\n"),
   );
@@ -201,6 +201,7 @@ async function main() {
   let inputPath;
   let runtime;
   let environmentId;
+  let projectId;
   let vaultId;
   if (command === "deploy") {
     const parsed = parseDeployArguments(args);
@@ -210,7 +211,7 @@ async function main() {
       process.exitCode = 2;
       return;
     }
-    ({ inputPath, runtime, environmentId, vaultId } = parsed);
+    ({ inputPath, runtime, environmentId, projectId, vaultId } = parsed);
   } else {
     inputPath = parsePackageArgument(args);
     if (!inputPath) {
@@ -226,6 +227,7 @@ async function main() {
       result = await deploy(result, {
         runtime,
         environmentId,
+        projectId,
         vaultId,
       });
     }

@@ -53,6 +53,30 @@ function helloClaudeValidation() {
   };
 }
 
+function helloGeminiValidation() {
+  const bundlePath = path.join(examplesPath, "hello-gemini");
+  const packagePath = path.join(
+    bundlePath,
+    "packages/greeter.agentpkg.yaml",
+  );
+  const resource = {
+    id: "greeter",
+    kind: "Agent",
+    implementation: {
+      format: "google.com/managed-agent:v1",
+      package: {
+        location: "./packages/greeter.agentpkg.yaml",
+      },
+    },
+  };
+
+  return {
+    manifestPath: path.join(bundlePath, "app.yaml"),
+    manifest: { spec: { resources: [resource] } },
+    resolvedPackages: new Map([[resource.id, packagePath]]),
+  };
+}
+
 function productManagerValidation() {
   const bundlePath = path.join(examplesPath, "product-manager-claude");
   const packagePath = path.join(
@@ -180,6 +204,18 @@ describe("aiappctl", () => {
     expect(result.stderr).toBe("");
   });
 
+  test("validates the Gemini Managed Agents example", async () => {
+    const result = await run(
+      "validate",
+      "--package",
+      path.join(examplesPath, "hello-gemini"),
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("app.yaml is valid");
+    expect(result.stderr).toBe("");
+  });
+
   test("deploys an Anthropic Managed Agent package", async () => {
     let request;
     const originalFetch = globalThis.fetch;
@@ -223,6 +259,108 @@ describe("aiappctl", () => {
       name: "Hello Claude",
       model: { id: "claude-opus-4-8" },
       system: "Respond with exactly: Hello, world!",
+    });
+  });
+
+  test("deploys a Google Managed Agent package", async () => {
+    const requests = [];
+    let operationPolls = 0;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+      const request = {
+        url: url.toString(),
+        method: init.method,
+        headers: Object.fromEntries(new Headers(init.headers)),
+        body: init.body ? JSON.parse(init.body) : undefined,
+      };
+      requests.push(request);
+
+      const pathname = new URL(url).pathname;
+      if (
+        pathname ===
+        "/v1beta1/projects/test-project/locations/global/agents"
+      ) {
+        return Response.json({
+          name: "projects/test-project/locations/global/agents/greeter/operations/op-123",
+        });
+      }
+      if (pathname.endsWith("/operations/op-123")) {
+        operationPolls += 1;
+        if (operationPolls === 1) {
+          return Response.json({
+            name: "projects/test-project/locations/global/agents/greeter/operations/op-123",
+          });
+        }
+        return Response.json({
+          name: "projects/test-project/locations/global/agents/greeter/operations/op-123",
+          done: true,
+          response: {
+            name: "projects/test-project/locations/global/agents/greeter",
+          },
+        });
+      }
+      if (pathname.endsWith("/agents/greeter")) {
+        return Response.json({
+          name: "projects/test-project/locations/global/agents/greeter",
+          id: "greeter",
+        });
+      }
+      return Response.json(
+        { error: { message: "unexpected request" } },
+        { status: 404 },
+      );
+    };
+
+    let result;
+    try {
+      result = await deploy(helloGeminiValidation(), {
+        runtime: "gemini",
+        projectId: "test-project",
+        accessToken: "test-access-token",
+        baseUrl: "https://aiplatform.googleapis.test",
+        operationPollIntervalMs: 0,
+        operationTimeoutMs: 1_000,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(result.errors).toEqual([]);
+    expect(result.deployed).toEqual([
+      {
+        id: "greeter",
+        kind: "Agent",
+        format: "google.com/managed-agent:v1",
+        providerId:
+          "projects/test-project/locations/global/agents/greeter",
+      },
+    ]);
+    expect(requests.map((request) => [request.method, request.url])).toEqual([
+      [
+        "POST",
+        "https://aiplatform.googleapis.test/v1beta1/projects/test-project/locations/global/agents",
+      ],
+      [
+        "GET",
+        "https://aiplatform.googleapis.test/v1beta1/projects/test-project/locations/global/agents/greeter/operations/op-123",
+      ],
+      [
+        "GET",
+        "https://aiplatform.googleapis.test/v1beta1/projects/test-project/locations/global/agents/greeter/operations/op-123",
+      ],
+      [
+        "GET",
+        "https://aiplatform.googleapis.test/v1beta1/projects/test-project/locations/global/agents/greeter",
+      ],
+    ]);
+    expect(requests[0].headers.authorization).toBe(
+      "Bearer test-access-token",
+    );
+    expect(requests[0].body).toEqual({
+      base_agent: "antigravity-preview-05-2026",
+      description: "A minimal greeting agent.",
+      system_instruction: "Respond with exactly: Hello, world!",
+      id: "greeter",
     });
   });
 
@@ -653,6 +791,18 @@ describe("aiappctl", () => {
     expect(result.environmentId).toBe("env_existing");
   });
 
+  test("parses a Google Cloud project", () => {
+    const result = parseDeployArguments([
+      "--runtime",
+      "gemini",
+      "--package=./app",
+      "--project=test-project",
+    ]);
+
+    expect(result.error).toBeUndefined();
+    expect(result.projectId).toBe("test-project");
+  });
+
   test("rejects the removed secret option", () => {
     const result = parseDeployArguments([
       "--runtime=claude",
@@ -937,7 +1087,7 @@ describe("aiappctl", () => {
     expect(result.exitCode).toBe(2);
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain(
-      "aiappctl: unsupported runtime 'openai'; supported runtimes: claude",
+      "aiappctl: unsupported runtime 'openai'; supported runtimes: claude, gemini",
     );
   });
 });

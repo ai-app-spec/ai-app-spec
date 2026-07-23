@@ -1,0 +1,18 @@
+apiVersion: app-spec.ai/v0.1
+kind: App
+
+metadata:
+  name: hello-gemini
+  version: 0.1.0
+  description: A minimal app using a Gemini Enterprise Agent Platform Managed Agents create payload.
+
+spec:
+  entrypoint: greeter
+  resources:
+    - id: greeter
+      kind: Agent
+      implementation:
+        format: google.com/managed-agent:v1
+        package:
+          location: ./packages/greeter.agentpkg.yaml
+          digest: sha256:b07730a40419cf623adeaa025ac1a272983be01eca777dbd90d9fd35b2f66f2e
