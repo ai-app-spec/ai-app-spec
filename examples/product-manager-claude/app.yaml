@@ -8,6 +8,10 @@ metadata:
 
 spec:
   entrypoint: product-manager
+  requirements:
+    secrets:
+      - id: linear-access-token
+        description: Linear API key for the Linear MCP server.
   resources:
     - id: product-manager
       kind: Agent
@@ -24,3 +28,7 @@ spec:
       connection:
         type: url
         url: https://mcp.linear.app/mcp
+      authentication:
+        type: bearer
+        secret:
+          ref: linear-access-token

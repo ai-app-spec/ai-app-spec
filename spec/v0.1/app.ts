@@ -84,6 +84,25 @@ export const resourceReferenceSchema = z
   })
   .meta({ id: "ResourceReference" });
 
+export const secretReferenceSchema = z
+  .strictObject({
+    ref: identifierSchema,
+  })
+  .meta({ id: "SecretReference" });
+
+export const secretRequirementSchema = z
+  .strictObject({
+    id: identifierSchema,
+    description: z.string().min(1).optional(),
+  })
+  .meta({ id: "SecretRequirement" });
+
+export const requirementsSchema = z
+  .strictObject({
+    secrets: z.array(secretRequirementSchema).min(1),
+  })
+  .meta({ id: "Requirements" });
+
 export const agentResourceSchema = z
   .strictObject({
     id: identifierSchema,
@@ -124,11 +143,19 @@ export const mcpServerConnectionSchema = z
   })
   .meta({ id: "MCPServerConnection" });
 
+export const mcpServerAuthenticationSchema = z
+  .strictObject({
+    type: z.literal("bearer"),
+    secret: secretReferenceSchema,
+  })
+  .meta({ id: "MCPServerAuthentication" });
+
 export const mcpServerResourceSchema = z
   .strictObject({
     id: identifierSchema,
     kind: z.literal("MCPServer"),
     connection: mcpServerConnectionSchema,
+    authentication: mcpServerAuthenticationSchema.optional(),
   })
   .meta({ id: "MCPServerResource" });
 
@@ -139,6 +166,7 @@ export const resourceSchema = z
 export const appSpecSchema = z
   .strictObject({
     entrypoint: identifierSchema,
+    requirements: requirementsSchema.optional(),
     resources: z.array(resourceSchema).min(1),
   })
   .meta({ id: "AppSpec" });
@@ -161,6 +189,24 @@ export const appManifestSchema = appManifestStructuralSchema.superRefine(
       string,
       (typeof manifest.spec.resources)[number]
     >();
+    const secretsById = new Map<
+      string,
+      NonNullable<typeof manifest.spec.requirements>["secrets"][number]
+    >();
+
+    for (const [index, secret] of (
+      manifest.spec.requirements?.secrets || []
+    ).entries()) {
+      if (secretsById.has(secret.id)) {
+        context.addIssue({
+          code: "custom",
+          path: ["spec", "requirements", "secrets", index, "id"],
+          message: `duplicate secret requirement id '${secret.id}'`,
+        });
+      } else {
+        secretsById.set(secret.id, secret);
+      }
+    }
 
     for (const [index, resource] of manifest.spec.resources.entries()) {
       if (resourcesById.has(resource.id)) {
@@ -192,6 +238,26 @@ export const appManifestSchema = appManifestStructuralSchema.superRefine(
     }
 
     for (const [resourceIndex, resource] of manifest.spec.resources.entries()) {
+      // TODO(resource-dispatch): Move MCPServer reference checks into a
+      // kind-specific semantic validator instead of branching over all resources.
+      if (resource.kind === "MCPServer" && resource.authentication) {
+        const secretRef = resource.authentication.secret.ref;
+        if (!secretsById.has(secretRef)) {
+          context.addIssue({
+            code: "custom",
+            path: [
+              "spec",
+              "resources",
+              resourceIndex,
+              "authentication",
+              "secret",
+              "ref",
+            ],
+            message: `secret requirement '${secretRef}' does not exist`,
+          });
+        }
+      }
+
       // TODO(resource-dispatch): Move Agent reference checks into a
       // kind-specific semantic validator instead of branching over all resources.
       if (resource.kind !== "Agent" || !resource.tools) {

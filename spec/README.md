@@ -17,9 +17,15 @@ The canonical archive encoding will be ZIP, whose archive root has the same layo
 
 The current schema supports `Agent` and `MCPServer` resources. An agent identifies its implementation with a namespaced format and an immutable package descriptor. A package location may be relative to the app bundle or an absolute URI; `file:` URIs are not portable and are rejected. The format's runtime adapter owns interpretation of the package contents.
 
-An agent can reference URL-backed MCP servers through its `tools` field. MCP server URLs must use HTTPS and must not contain embedded credentials or fragments. Tool references are validated within the app manifest, while authentication and live server capability discovery are deferred to the runtime.
+An agent can reference URL-backed MCP servers through its `tools` field. MCP server URLs must use HTTPS and must not contain embedded credentials or fragments. Tool references are validated within the app manifest, while live server capability discovery is deferred to the runtime.
+
+An MCP server that requires a bearer token references a logical secret requirement. The package declares the requirement and authentication mechanism, but never contains the customer credential, an environment-variable name, or a provider-native secret identifier. Those values belong to the installation binding.
 
 ```yaml
+requirements:
+  secrets:
+    - id: linear-access-token
+      description: Linear API key for the Linear MCP server.
 resources:
   - id: product-manager
     kind: Agent
@@ -35,6 +41,10 @@ resources:
     connection:
       type: url
       url: https://mcp.linear.app/mcp
+    authentication:
+      type: bearer
+      secret:
+        ref: linear-access-token
 ```
 
 The specification does not define build inputs, container implementation details, deployment topology, scaling, or resource-allocation policy. These remain responsibilities of tooling and the target runtime.
@@ -67,6 +77,20 @@ export ANTHROPIC_API_KEY="your-api-key"
 bun run deploy --runtime claude --package=../../examples/hello-claude
 ```
 
+Deploy the authenticated Product Manager example using a pre-provisioned Claude vault:
+
+```sh
+export ANTHROPIC_API_KEY="your-anthropic-api-key"
+bun run deploy \
+  --runtime claude \
+  --package=../../examples/product-manager-claude \
+  --vault-id vlt_...
+```
+
+The vault must belong to the Anthropic workspace selected by `ANTHROPIC_API_KEY` and contain an active `static_bearer` or `mcp_oauth` credential for every authenticated MCP server URL referenced by an Agent. The CLI never accepts secret values and does not create, update, archive, or delete vaults or credentials.
+
 `deploy` selects a provider adapter from each Agent resource's implementation format. The only currently supported runtime is `claude`, which accepts `anthropic.com/managed-agent:v1` packages stored inside the app bundle. The adapter parses the package YAML and sends it to Anthropic's `POST /v1/agents` endpoint using the Managed Agents beta API. Every Agent resource must use that format when `--runtime claude` is selected; deployment fails during preflight if any resource declares a different format.
 
-During Claude deployment, each Agent's referenced `MCPServer` resources are composed into the provider request as `mcp_servers` entries with matching `mcp_toolset` entries. MCP authentication remains a session concern and is not included in the reusable Agent definition. The initial implementation does not create environments or sessions, persist deployment state, reconcile an existing Agent, or resolve external package locations. Each successful command invocation therefore creates a new Managed Agent. All deployable resources are validated and locally prepared before the first API request, but provider failures can still leave resources created earlier in a multi-resource app; their IDs are reported on stderr.
+During Claude deployment, each Agent's referenced `MCPServer` resources are composed into the provider request as `mcp_servers` entries with matching `mcp_toolset` entries. MCP authentication is not included in the reusable Agent definition. If any referenced MCP server declares authentication, `--vault-id` is required. Before creating an Agent, the adapter retrieves that vault and verifies from credential metadata that every authenticated MCP server URL has an active compatible credential. A missing, archived, or non-conforming vault fails deployment before the first provider mutation.
+
+Vault credentials are consumed through `vault_ids` on Claude sessions and scheduled deployments. The current schema and CLI do not yet create either, so this implementation verifies the binding but cannot attach it to an execution yet. The initial implementation also does not persist or reconcile Agent IDs or resolve external package locations. Each successful invocation therefore creates a new Managed Agent. Provider failures can leave an Agent created earlier in a multi-resource deployment; its ID is reported on stderr.

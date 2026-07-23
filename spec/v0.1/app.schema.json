@@ -70,6 +70,9 @@
         "entrypoint": {
           "$ref": "#/$defs/Identifier"
         },
+        "requirements": {
+          "$ref": "#/$defs/Requirements"
+        },
         "resources": {
           "minItems": 1,
           "type": "array",
@@ -81,6 +84,38 @@
       "required": [
         "entrypoint",
         "resources"
+      ],
+      "additionalProperties": false
+    },
+    "Requirements": {
+      "type": "object",
+      "properties": {
+        "secrets": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SecretRequirement"
+          }
+        }
+      },
+      "required": [
+        "secrets"
+      ],
+      "additionalProperties": false
+    },
+    "SecretRequirement": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id"
       ],
       "additionalProperties": false
     },
@@ -207,6 +242,9 @@
         },
         "connection": {
           "$ref": "#/$defs/MCPServerConnection"
+        },
+        "authentication": {
+          "$ref": "#/$defs/MCPServerAuthentication"
         }
       },
       "required": [
@@ -245,6 +283,35 @@
           "pattern": "^https:\\/\\/"
         }
       ]
+    },
+    "MCPServerAuthentication": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "bearer"
+        },
+        "secret": {
+          "$ref": "#/$defs/SecretReference"
+        }
+      },
+      "required": [
+        "type",
+        "secret"
+      ],
+      "additionalProperties": false
+    },
+    "SecretReference": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "additionalProperties": false
     }
   }
 }
