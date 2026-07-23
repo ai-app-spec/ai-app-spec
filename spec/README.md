@@ -21,7 +21,7 @@ An agent can reference URL-backed MCP servers through its `tools` field. MCP ser
 
 An MCP server that requires a bearer token references a logical secret requirement. The package declares the requirement and authentication mechanism, but never contains the customer credential, an environment-variable name, or a provider-native secret identifier. Those values belong to the installation binding.
 
-An Agent can similarly reference a logical execution environment requirement. The package describes why the environment is needed without embedding a provider-native environment identifier or configuration. The installing operator binds that requirement to an environment governed by the target runtime.
+An Agent can similarly reference a logical execution environment requirement. The package describes why the environment is needed without embedding a provider-native environment identifier or configuration. The installing operator binds that requirement to an environment governed by the target runtime. The optional `networking.mcpServers` field defaults to `false`; setting it to `true` requires the bound environment to permit outbound access to the Agent's declared MCP servers.
 
 ```yaml
 requirements:
@@ -31,6 +31,8 @@ requirements:
   executionEnvironments:
     - id: product-manager-sandbox
       description: Isolated sandbox able to reach the agent's declared MCP servers.
+      networking:
+        mcpServers: true
 resources:
   - id: product-manager
     kind: Agent
@@ -97,7 +99,7 @@ bun run deploy \
 
 The vault must belong to the Anthropic workspace selected by `ANTHROPIC_API_KEY` and contain an active `static_bearer` or `mcp_oauth` credential for every authenticated MCP server URL referenced by an Agent. The CLI never accepts secret values and does not create, update, archive, or delete vaults or credentials.
 
-The environment must belong to the same Anthropic workspace and must not be archived. The CLI verifies the binding but does not create, update, archive, or delete environments.
+The environment must belong to the same Anthropic workspace and must not be archived. When `networking.mcpServers` is required, an Anthropic cloud environment must use unrestricted networking or limited networking with `allow_mcp_servers` enabled. The CLI cannot verify self-hosted egress policy and therefore rejects self-hosted environments for this requirement. It verifies the binding but does not create, update, archive, or delete environments.
 
 `deploy` selects a provider adapter from each Agent resource's implementation format. The only currently supported runtime is `claude`, which accepts `anthropic.com/managed-agent:v1` packages stored inside the app bundle. The adapter parses the package YAML and sends it to Anthropic's `POST /v1/agents` endpoint using the Managed Agents beta API. Every Agent resource must use that format when `--runtime claude` is selected; deployment fails during preflight if any resource declares a different format.
 

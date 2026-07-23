@@ -115,7 +115,12 @@ function withExecutionEnvironment(validation) {
   );
   validation.manifest.spec.requirements ||= {};
   validation.manifest.spec.requirements.executionEnvironments = [
-    { id: "product-manager-sandbox" },
+    {
+      id: "product-manager-sandbox",
+      networking: {
+        mcpServers: true,
+      },
+    },
   ];
   agent.executionEnvironment = { ref: "product-manager-sandbox" };
   return validation;
@@ -237,7 +242,13 @@ describe("aiappctl", () => {
         return Response.json({
           id: "env_product_manager",
           archived_at: null,
-          config: { type: "cloud" },
+          config: {
+            type: "cloud",
+            networking: {
+              type: "limited",
+              allow_mcp_servers: true,
+            },
+          },
         });
       }
       if (pathname === "/v1/vaults/vlt_product_manager") {
@@ -408,6 +419,151 @@ describe("aiappctl", () => {
     expect(result.errors).toEqual([
       "Anthropic environment 'env_archived' is archived",
     ]);
+  });
+
+  test("accepts unrestricted networking for MCP server access", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/v1/environments/env_unrestricted") {
+        return Response.json({
+          id: "env_unrestricted",
+          archived_at: null,
+          config: {
+            type: "cloud",
+            networking: { type: "unrestricted" },
+          },
+        });
+      }
+      return Response.json({ id: "agent_test_123", version: 1 });
+    };
+
+    let result;
+    try {
+      result = await deploy(
+        withExecutionEnvironment(helloClaudeValidation()),
+        {
+          runtime: "claude",
+          apiKey: "test-api-key",
+          baseUrl: "https://api.anthropic.test",
+          environmentId: "env_unrestricted",
+        },
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(result.errors).toEqual([]);
+    expect(result.deployed).toHaveLength(1);
+  });
+
+  test("rejects a cloud environment without MCP server network access", async () => {
+    const requests = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+      requests.push({ url: url.toString(), method: init.method });
+      return Response.json({
+        id: "env_mcp_blocked",
+        archived_at: null,
+        config: {
+          type: "cloud",
+          networking: {
+            type: "limited",
+            allow_mcp_servers: false,
+          },
+        },
+      });
+    };
+
+    let result;
+    try {
+      result = await deploy(
+        withExecutionEnvironment(helloClaudeValidation()),
+        {
+          runtime: "claude",
+          apiKey: "test-api-key",
+          baseUrl: "https://api.anthropic.test",
+          environmentId: "env_mcp_blocked",
+        },
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(requests).toEqual([
+      {
+        method: "GET",
+        url: "https://api.anthropic.test/v1/environments/env_mcp_blocked",
+      },
+    ]);
+    expect(result.deployed).toEqual([]);
+    expect(result.errors).toEqual([
+      "Claude environment 'env_mcp_blocked' does not satisfy execution environment requirement 'product-manager-sandbox': MCP server network access is not enabled",
+    ]);
+  });
+
+  test("rejects unverifiable self-hosted MCP server networking", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      Response.json({
+        id: "env_self_hosted",
+        archived_at: null,
+        config: { type: "self_hosted" },
+      });
+
+    let result;
+    try {
+      result = await deploy(
+        withExecutionEnvironment(helloClaudeValidation()),
+        {
+          runtime: "claude",
+          apiKey: "test-api-key",
+          baseUrl: "https://api.anthropic.test",
+          environmentId: "env_self_hosted",
+        },
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(result.deployed).toEqual([]);
+    expect(result.errors).toEqual([
+      "Claude environment 'env_self_hosted' cannot verify MCP server network access for execution environment requirement 'product-manager-sandbox' because it is self-hosted",
+    ]);
+  });
+
+  test("does not enforce MCP server networking when it is false", async () => {
+    const validation = withExecutionEnvironment(helloClaudeValidation());
+    validation.manifest.spec.requirements.executionEnvironments[0].networking.mcpServers =
+      false;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/v1/environments/env_self_hosted") {
+        return Response.json({
+          id: "env_self_hosted",
+          archived_at: null,
+          config: { type: "self_hosted" },
+        });
+      }
+      return Response.json({ id: "agent_test_123", version: 1 });
+    };
+
+    let result;
+    try {
+      result = await deploy(validation, {
+        runtime: "claude",
+        apiKey: "test-api-key",
+        baseUrl: "https://api.anthropic.test",
+        environmentId: "env_self_hosted",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(result.errors).toEqual([]);
+    expect(result.deployed).toHaveLength(1);
   });
 
   test("requires a vault id for authenticated MCP servers", async () => {
