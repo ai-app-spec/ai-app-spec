@@ -162,11 +162,24 @@
         "description": {
           "type": "string",
           "minLength": 1
+        },
+        "networking": {
+          "$ref": "#/$defs/ExecutionEnvironmentNetworkingRequirement"
         }
       },
       "required": [
         "id"
       ],
+      "additionalProperties": false
+    },
+    "ExecutionEnvironmentNetworkingRequirement": {
+      "type": "object",
+      "properties": {
+        "mcpServers": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
       "additionalProperties": false
     },
     "Resource": {

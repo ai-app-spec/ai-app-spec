@@ -36,6 +36,11 @@ function anthropicErrorMessage(response, body) {
 
 function collectExecutionEnvironmentBindings(manifest) {
   const bindings = new Map();
+  const requirements =
+    manifest.spec.requirements?.executionEnvironments || [];
+  const requirementsById = new Map(
+    requirements.map((requirement) => [requirement.id, requirement]),
+  );
 
   for (const resource of manifest.spec.resources) {
     // TODO(resource-dispatch): Have the deploy layer pass only Agent resources
@@ -51,9 +56,38 @@ function collectExecutionEnvironmentBindings(manifest) {
   }
 
   return [...bindings].map(([requirementId, resourceIds]) => ({
+    requirement: requirementsById.get(requirementId),
     requirementId,
     resourceIds,
   }));
+}
+
+function verifyEnvironmentRequirements(environment, bindings) {
+  for (const binding of bindings) {
+    if (!binding.requirement?.networking?.mcpServers) {
+      continue;
+    }
+
+    const config = environment.config;
+    if (
+      config?.type === "cloud" &&
+      (config.networking?.type === "unrestricted" ||
+        (config.networking?.type === "limited" &&
+          config.networking.allow_mcp_servers === true))
+    ) {
+      continue;
+    }
+
+    if (config?.type === "self_hosted") {
+      throw new Error(
+        `Claude environment '${environment.id}' cannot verify MCP server network access for execution environment requirement '${binding.requirementId}' because it is self-hosted`,
+      );
+    }
+
+    throw new Error(
+      `Claude environment '${environment.id}' does not satisfy execution environment requirement '${binding.requirementId}': MCP server network access is not enabled`,
+    );
+  }
 }
 
 async function retrieveEnvironment(environmentId, options) {
@@ -106,10 +140,14 @@ export async function verifyClaudeEnvironment(validation, options) {
     options.environmentId,
     options,
   );
+  verifyEnvironmentRequirements(environment, bindings);
 
   return {
     id: environment.id,
     environmentType: environment.config?.type,
-    bindings,
+    bindings: bindings.map(({ requirementId, resourceIds }) => ({
+      requirementId,
+      resourceIds,
+    })),
   };
 }

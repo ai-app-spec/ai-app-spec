@@ -167,6 +167,9 @@ describe("appManifestSchema", () => {
         {
           id: "agent-sandbox",
           description: "Isolated sandbox for agent execution.",
+          networking: {
+            mcpServers: true,
+          },
         },
       ],
     };
@@ -175,6 +178,30 @@ describe("appManifestSchema", () => {
     };
 
     expect(appManifestSchema.safeParse(input).success).toBe(true);
+  });
+
+  test("defaults optional MCP server access to false", () => {
+    for (const networking of [{}, { mcpServers: false }]) {
+      const input: any = manifest();
+      input.spec.requirements = {
+        executionEnvironments: [
+          {
+            id: "agent-sandbox",
+            networking,
+          },
+        ],
+      };
+
+      const result = appManifestSchema.safeParse(input);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(
+          result.data.spec.requirements?.executionEnvironments?.[0]
+            ?.networking?.mcpServers ?? false,
+        ).toBe(false);
+      }
+    }
   });
 
   test("rejects empty requirements", () => {

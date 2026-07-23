@@ -103,10 +103,17 @@ export const executionEnvironmentReferenceSchema = z
   })
   .meta({ id: "ExecutionEnvironmentReference" });
 
+export const executionEnvironmentNetworkingRequirementSchema = z
+  .strictObject({
+    mcpServers: z.boolean().optional().meta({ default: false }),
+  })
+  .meta({ id: "ExecutionEnvironmentNetworkingRequirement" });
+
 export const executionEnvironmentRequirementSchema = z
   .strictObject({
     id: identifierSchema,
     description: z.string().min(1).optional(),
+    networking: executionEnvironmentNetworkingRequirementSchema.optional(),
   })
   .meta({ id: "ExecutionEnvironmentRequirement" });
 
