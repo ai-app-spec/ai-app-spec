@@ -1,12 +1,17 @@
 import { claudeRuntime } from "./runtimes/claude.js";
+import { geminiRuntime } from "./runtimes/gemini.js";
 
-const runtimeAdapters = new Map([[claudeRuntime.name, claudeRuntime]]);
+const runtimeAdapters = new Map([
+  [claudeRuntime.name, claudeRuntime],
+  [geminiRuntime.name, geminiRuntime],
+]);
 const supportedRuntimes = [...runtimeAdapters.keys()].join(", ");
 
 export function parseDeployArguments(args) {
   let inputPath;
   let runtime;
   let environmentId;
+  let projectId;
   let vaultId;
 
   for (let index = 0; index < args.length; index += 1) {
@@ -16,6 +21,7 @@ export function parseDeployArguments(args) {
       argument === "--package" ||
       argument === "--runtime" ||
       argument === "--environment-id" ||
+      argument === "--project" ||
       argument === "--vault-id"
     ) {
       const value = args[index + 1];
@@ -38,6 +44,11 @@ export function parseDeployArguments(args) {
           return { error: "--environment-id may only be specified once" };
         }
         environmentId = value;
+      } else if (argument === "--project") {
+        if (projectId !== undefined) {
+          return { error: "--project may only be specified once" };
+        }
+        projectId = value;
       } else if (argument === "--vault-id") {
         if (vaultId !== undefined) {
           return { error: "--vault-id may only be specified once" };
@@ -94,6 +105,17 @@ export function parseDeployArguments(args) {
       continue;
     }
 
+    if (argument.startsWith("--project=")) {
+      if (projectId !== undefined) {
+        return { error: "--project may only be specified once" };
+      }
+      projectId = argument.slice("--project=".length) || undefined;
+      if (!projectId) {
+        return { error: "--project requires a value" };
+      }
+      continue;
+    }
+
     return { error: `unexpected argument '${argument}'` };
   }
 
@@ -113,6 +135,7 @@ export function parseDeployArguments(args) {
     inputPath,
     runtime,
     environmentId,
+    projectId,
     vaultId,
   };
 }

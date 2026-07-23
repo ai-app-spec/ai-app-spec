@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@ai-app-spec/spec": "file:../../spec",
+    "google-auth-library": "^10.9.0",
     "yaml": "^2.8.1"
   }
 }

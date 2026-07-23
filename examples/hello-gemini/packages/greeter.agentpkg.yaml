@@ -1,0 +1,3 @@
+base_agent: antigravity-preview-05-2026
+description: A minimal greeting agent.
+system_instruction: "Respond with exactly: Hello, world!"
