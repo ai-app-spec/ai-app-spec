@@ -76,6 +76,8 @@ async function validateLocalAgentPackages(manifest, manifestPath) {
   const resolvedPackages = new Map();
 
   for (const [index, resource] of manifest.spec.resources.entries()) {
+    // TODO(resource-dispatch): Route resources to kind-specific validators
+    // before performing Agent package validation.
     if (resource.kind !== "Agent") {
       continue;
     }

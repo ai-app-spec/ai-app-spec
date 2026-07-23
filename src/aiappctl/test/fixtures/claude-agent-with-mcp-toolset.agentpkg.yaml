@@ -1,0 +1,6 @@
+name: Claude Agent With MCP Toolset
+model:
+  id: claude-opus-4-8
+tools:
+  - type: mcp_toolset
+    mcp_server_name: hidden
