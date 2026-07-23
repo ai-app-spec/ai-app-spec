@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { deploy } from "./commands/deploy/index.js";
+import {
+  deploy,
+  parseDeployArguments,
+} from "./commands/deploy/index.js";
 
 const cliPath = fileURLToPath(new URL("./cli.js", import.meta.url));
 const fixturesPath = fileURLToPath(new URL("./test/fixtures", import.meta.url));
@@ -74,11 +77,23 @@ function productManagerValidation() {
       type: "url",
       url: "https://mcp.linear.app/mcp",
     },
+    authentication: {
+      type: "bearer",
+      secret: { ref: "linear-access-token" },
+    },
   };
 
   return {
     manifestPath: path.join(bundlePath, "app.yaml"),
-    manifest: { spec: { resources: [agent, linear] } },
+    manifest: {
+      metadata: { name: "product-manager-claude" },
+      spec: {
+        requirements: {
+          secrets: [{ id: "linear-access-token" }],
+        },
+        resources: [agent, linear],
+      },
+    },
     resolvedPackages: new Map([[agent.id, packagePath]]),
   };
 }
@@ -195,14 +210,107 @@ describe("aiappctl", () => {
   });
 
   test("deploys an Agent with referenced MCPServer resources", async () => {
-    let request;
+    const requests = [];
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async (url, init) => {
-      request = {
+      const request = {
         url: url.toString(),
-        body: JSON.parse(init.body),
+        method: init.method,
+        body: init.body ? JSON.parse(init.body) : undefined,
       };
+      requests.push(request);
+
+      const pathname = new URL(url).pathname;
+      if (pathname === "/v1/vaults/vlt_product_manager") {
+        return Response.json({
+          id: "vlt_product_manager",
+          archived_at: null,
+        });
+      }
+      if (pathname.endsWith("/credentials")) {
+        return Response.json({
+          data: [
+            {
+              id: "vcrd_linear",
+              archived_at: null,
+              auth: {
+                type: "static_bearer",
+                mcp_server_url: "https://mcp.linear.app/mcp/",
+              },
+            },
+          ],
+          next_page: null,
+        });
+      }
       return Response.json({ id: "agent_product_manager", version: 1 });
+    };
+
+    let result;
+    try {
+      result = await deploy(productManagerValidation(), {
+        runtime: "claude",
+        apiKey: "test-api-key",
+        baseUrl: "https://api.anthropic.test",
+        vaultId: "vlt_product_manager",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(result.errors).toEqual([]);
+    expect(result.vault).toEqual({
+      id: "vlt_product_manager",
+      credentials: [
+        {
+          id: "vcrd_linear",
+          resourceId: "linear",
+          credentialType: "static_bearer",
+        },
+      ],
+    });
+    expect(result.deployed).toEqual([
+      {
+        id: "product-manager",
+        kind: "Agent",
+        format: "anthropic.com/managed-agent:v1",
+        providerId: "agent_product_manager",
+        providerVersion: 1,
+      },
+    ]);
+    expect(requests.map((request) => [request.method, request.url])).toEqual([
+      [
+        "GET",
+        "https://api.anthropic.test/v1/vaults/vlt_product_manager",
+      ],
+      [
+        "GET",
+        "https://api.anthropic.test/v1/vaults/vlt_product_manager/credentials",
+      ],
+      ["POST", "https://api.anthropic.test/v1/agents"],
+    ]);
+    expect(requests[0].body).toBeUndefined();
+    expect(requests[1].body).toBeUndefined();
+    expect(requests[2].body.mcp_servers).toEqual([
+      {
+        type: "url",
+        name: "linear",
+        url: "https://mcp.linear.app/mcp",
+      },
+    ]);
+    expect(requests[2].body.tools).toEqual([
+      {
+        type: "mcp_toolset",
+        mcp_server_name: "linear",
+      },
+    ]);
+  });
+
+  test("requires a vault id for authenticated MCP servers", async () => {
+    let fetchCalls = 0;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      fetchCalls += 1;
+      return Response.json({ id: "unexpected" });
     };
 
     let result;
@@ -216,30 +324,72 @@ describe("aiappctl", () => {
       globalThis.fetch = originalFetch;
     }
 
-    expect(result.errors).toEqual([]);
-    expect(result.deployed).toEqual([
-      {
-        id: "product-manager",
-        kind: "Agent",
-        format: "anthropic.com/managed-agent:v1",
-        providerId: "agent_product_manager",
-        providerVersion: 1,
-      },
+    expect(fetchCalls).toBe(0);
+    expect(result.errors).toEqual([
+      "--vault-id is required when authenticated MCPServer resources are referenced",
     ]);
-    expect(request.url).toBe("https://api.anthropic.test/v1/agents");
-    expect(request.body.mcp_servers).toEqual([
-      {
-        type: "url",
-        name: "linear",
-        url: "https://mcp.linear.app/mcp",
-      },
+  });
+
+  test("rejects a vault without the required MCP credential", async () => {
+    const requests = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+      requests.push({ url: url.toString(), method: init.method });
+      const pathname = new URL(url).pathname;
+
+      if (pathname === "/v1/vaults/vlt_product_manager") {
+        return Response.json({
+          id: "vlt_product_manager",
+          archived_at: null,
+        });
+      }
+      if (pathname.endsWith("/credentials")) {
+        return Response.json({ data: [], next_page: null });
+      }
+      return Response.json({ id: "unexpected" });
+    };
+
+    let result;
+    try {
+      result = await deploy(productManagerValidation(), {
+        runtime: "claude",
+        apiKey: "test-api-key",
+        baseUrl: "https://api.anthropic.test",
+        vaultId: "vlt_product_manager",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(result.deployed).toEqual([]);
+    expect(result.errors).toEqual([
+      "vault 'vlt_product_manager' does not contain an active MCP credential for resource 'linear' at https://mcp.linear.app/mcp",
     ]);
-    expect(request.body.tools).toEqual([
-      {
-        type: "mcp_toolset",
-        mcp_server_name: "linear",
-      },
+    expect(requests.every((request) => request.method === "GET")).toBe(true);
+  });
+
+  test("parses a vault binding", () => {
+    const result = parseDeployArguments([
+      "--runtime",
+      "claude",
+      "--package=./app",
+      "--vault-id=vlt_existing",
     ]);
+
+    expect(result.error).toBeUndefined();
+    expect(result.vaultId).toBe("vlt_existing");
+  });
+
+  test("rejects the removed secret option", () => {
+    const result = parseDeployArguments([
+      "--runtime=claude",
+      "--package=./app",
+      "--secret=linear-access-token=env:LINEAR_API_KEY",
+    ]);
+
+    expect(result.error).toBe(
+      "unexpected argument '--secret=linear-access-token=env:LINEAR_API_KEY'",
+    );
   });
 
   test("prepares the MCP-backed example through the deploy CLI", async () => {
@@ -263,7 +413,29 @@ describe("aiappctl", () => {
   test("preserves non-MCP package tools when adding MCP toolsets", async () => {
     let requestBody;
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (_url, init) => {
+    globalThis.fetch = async (url, init) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/v1/vaults/vlt_product_manager") {
+        return Response.json({
+          id: "vlt_product_manager",
+          archived_at: null,
+        });
+      }
+      if (pathname.endsWith("/credentials")) {
+        return Response.json({
+          data: [
+            {
+              id: "vcrd_linear",
+              archived_at: null,
+              auth: {
+                type: "static_bearer",
+                mcp_server_url: "https://mcp.linear.app/mcp",
+              },
+            },
+          ],
+          next_page: null,
+        });
+      }
       requestBody = JSON.parse(init.body);
       return Response.json({ id: "agent_product_manager", version: 1 });
     };
@@ -279,6 +451,7 @@ describe("aiappctl", () => {
           runtime: "claude",
           apiKey: "test-api-key",
           baseUrl: "https://api.anthropic.test",
+          vaultId: "vlt_product_manager",
         },
       );
     } finally {

@@ -133,6 +133,62 @@ describe("appManifestSchema", () => {
     expect(appManifestSchema.safeParse(input).success).toBe(true);
   });
 
+  test("accepts an MCPServer with a bearer secret requirement", () => {
+    const input: any = manifest();
+    input.spec.requirements = {
+      secrets: [
+        {
+          id: "linear-access-token",
+          description: "Linear API key or OAuth access token.",
+        },
+      ],
+    };
+    input.spec.resources[0].tools = [{ ref: "linear" }];
+    input.spec.resources.push({
+      id: "linear",
+      kind: "MCPServer",
+      connection: {
+        type: "url",
+        url: "https://mcp.linear.app/mcp",
+      },
+      authentication: {
+        type: "bearer",
+        secret: { ref: "linear-access-token" },
+      },
+    });
+
+    expect(appManifestSchema.safeParse(input).success).toBe(true);
+  });
+
+  test("rejects unresolved and duplicate secret requirements", () => {
+    const input: any = manifest();
+    input.spec.requirements = {
+      secrets: [{ id: "linear-token" }, { id: "linear-token" }],
+    };
+    input.spec.resources.push({
+      id: "linear",
+      kind: "MCPServer",
+      connection: {
+        type: "url",
+        url: "https://mcp.linear.app/mcp",
+      },
+      authentication: {
+        type: "bearer",
+        secret: { ref: "missing-token" },
+      },
+    });
+
+    const result = appManifestSchema.safeParse(input);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.message)).toEqual([
+        "duplicate secret requirement id 'linear-token'",
+        "secret requirement 'missing-token' does not exist",
+      ]);
+    }
+  });
+
   test("rejects an MCPServer as the entrypoint", () => {
     const input: any = manifest();
     input.spec.entrypoint = "linear";
