@@ -67,14 +67,15 @@ AI App Spec is an early proposal. The first milestone is intentionally small, co
 
 ## Call a deployed Claude agent from Claude Code
 
-The reference CLI can expose one deployed Claude Managed Agent as a local stdio MCP server with a single `exec` tool. Each tool call creates a fresh session, waits for it to finish, and returns its text response.
+The reference CLI exposes a deployed Claude Managed Agent through a local stdio MCP server named `claude-managed-agents`. The server has one tool named after the app's `spec.entrypoint`; for the Product Manager example, that tool is `product-manager`. Start a fresh Agent session with the tool's `start` operation, then use `status` with the returned run ID until the response is completed or failed. This keeps long-running Agent sessions from holding an MCP tool request open.
 
-Add the server to Claude Code using the Agent and environment IDs returned or verified during deployment:
+Add the server to Claude Code using the app package and the Agent and environment IDs returned or verified during deployment:
 
 ```sh
-claude mcp add --transport stdio --scope local hello-claude -- \
+claude mcp add --transport stdio --scope local claude-managed-agents -- \
   bun "$PWD/src/aiappctl/cli.js" mcp serve \
   --runtime claude \
+  --package "$PWD/examples/hello-claude" \
   --agent-id agent_... \
   --environment-id env_...
 ```
@@ -82,15 +83,41 @@ claude mcp add --transport stdio --scope local hello-claude -- \
 If the Agent uses authenticated MCP servers, also pass its conforming vault:
 
 ```sh
-claude mcp add --transport stdio --scope local product-manager -- \
+claude mcp add --transport stdio --scope local claude-managed-agents -- \
   bun "$PWD/src/aiappctl/cli.js" mcp serve \
   --runtime claude \
+  --package "$PWD/examples/product-manager-claude" \
   --agent-id agent_... \
   --environment-id env_... \
   --vault-id vlt_...
 ```
 
-Start Claude Code with `ANTHROPIC_API_KEY` in its environment, then use `/mcp` to confirm that the server exposes `exec`. This MVP creates an independent session for every call and does not handle client-side tool approvals.
+Start Claude Code with `ANTHROPIC_API_KEY` in its environment, then use `/mcp` to confirm that `claude-managed-agents` exposes the app entrypoint. This MVP creates an independent session for every call.
+
+### Demo from Claude Cowork with ngrok
+
+Cowork requires a remote MCP URL. For a short-lived demo, start the same server over Streamable HTTP:
+
+```sh
+bun "$PWD/src/aiappctl/cli.js" mcp serve \
+  --runtime claude \
+  --transport http \
+  --port 3000 \
+  --package "$PWD/examples/product-manager-claude" \
+  --agent-id agent_... \
+  --environment-id env_... \
+  --vault-id vlt_...
+```
+
+In another terminal, expose the listener:
+
+```sh
+ngrok http 3000
+```
+
+Add `https://<ngrok-host>/mcp` as a custom connector in Cowork. This demo endpoint has no connector authentication and can invoke an Agent with access to its configured tools, so keep the tunnel open only while actively demonstrating it.
+
+The HTTP server keeps run state in memory and shares it across MCP connections, allowing Cowork to reconnect between `start` and `status`. Restarting the server loses outstanding run IDs. Any tools that the managed Agent needs during a detached run must be allowed by its deployment because Cowork cannot provide an approval through the completed `start` request.
 
 ## Further reading
 

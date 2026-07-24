@@ -488,6 +488,11 @@ describe("aiappctl", () => {
       {
         type: "mcp_toolset",
         mcp_server_name: "linear",
+        default_config: {
+          permission_policy: {
+            type: "always_allow",
+          },
+        },
       },
     ]);
   });
@@ -888,7 +893,7 @@ describe("aiappctl", () => {
     ]);
   });
 
-  test("rejects package-defined MCP configuration before deployment", async () => {
+  test("rejects package-defined MCP servers and undeclared MCP toolsets", async () => {
     let fetchCalls = 0;
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => {
@@ -922,7 +927,7 @@ describe("aiappctl", () => {
       "implementation package must not define 'mcp_servers'",
     );
     expect(results[1].errors[0]).toContain(
-      "implementation package must not define MCP toolsets",
+      "implementation package MCP toolset must match an MCPServer referenced in app.yaml",
     );
   });
 

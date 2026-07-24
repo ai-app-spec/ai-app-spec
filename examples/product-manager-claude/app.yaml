@@ -28,7 +28,7 @@ spec:
         format: anthropic.com/managed-agent:v1
         package:
           location: ./packages/product-manager.agentpkg.yaml
-          digest: sha256:cdc449575aea61f43741f4a835d4b2438ca9369e2547cdb9159bc0ebba24aa15
+          digest: sha256:aae5e6c250f5efe02c565291d755e01dba7c1fe4c97d277ae09b9b2ca9e09f8b
 
     - id: linear
       kind: MCPServer

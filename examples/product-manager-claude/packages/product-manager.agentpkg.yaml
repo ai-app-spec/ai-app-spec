@@ -7,3 +7,9 @@ system: |
   and customer data. Identify recurring pain points, sources of friction, and
   opportunities for the product to solve or improve them. Clearly distinguish
   evidence from inference and cite the source material behind your conclusions.
+tools:
+  - type: mcp_toolset
+    mcp_server_name: linear
+    default_config:
+      permission_policy:
+        type: always_allow

@@ -16,7 +16,7 @@ function usage() {
       "Usage:",
       "  aiappctl validate --package=<bundle-directory|app.yaml>",
       "  aiappctl deploy --runtime <claude|gemini> --package=<bundle-directory|app.yaml> [--project <google-cloud-project>] [--environment-id <id>] [--vault-id <id>]",
-      "  aiappctl mcp serve --runtime claude --agent-id <id> --environment-id <id> [--vault-id <id>]",
+      "  aiappctl mcp serve --runtime claude [--transport <stdio|http>] [--port <port>] --package=<bundle-directory|app.yaml> --agent-id <id> --environment-id <id> [--vault-id <id>]",
       "  aiappctl digest <file>",
     ].join("\n"),
   );
@@ -204,7 +204,19 @@ async function main() {
     }
 
     try {
-      await serveMcp(parsed);
+      const validation = await validate(parsed.inputPath);
+      if (validation.errors.length > 0) {
+        throw new Error(
+          `${validation.manifestPath} is invalid:\n${validation.errors
+            .map((error) => `- ${error}`)
+            .join("\n")}`,
+        );
+      }
+
+      await serveMcp({
+        ...parsed,
+        agentName: validation.manifest.spec.entrypoint,
+      });
     } catch (error) {
       console.error(`aiappctl: ${error.message}`);
       process.exitCode = 1;

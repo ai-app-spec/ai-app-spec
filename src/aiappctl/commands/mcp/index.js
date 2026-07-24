@@ -1,5 +1,8 @@
 import { claudeMcpRuntime } from "./runtimes/claude.js";
-import { serveExecMcpServer } from "./server.js";
+import {
+  serveManagedAgentsMcpHttp,
+  serveManagedAgentsMcpServer,
+} from "./server.js";
 
 const runtimeAdapters = new Map([
   [claudeMcpRuntime.name, claudeMcpRuntime],
@@ -12,15 +15,21 @@ export function parseMcpArguments(args) {
   }
 
   let runtime;
+  let transport = "stdio";
+  let inputPath;
   let agentId;
   let environmentId;
   let vaultId;
+  let port;
 
   const values = new Map([
     ["--runtime", (value) => (runtime = value)],
+    ["--transport", (value) => (transport = value)],
+    ["--package", (value) => (inputPath = value)],
     ["--agent-id", (value) => (agentId = value)],
     ["--environment-id", (value) => (environmentId = value)],
     ["--vault-id", (value) => (vaultId = value)],
+    ["--port", (value) => (port = value)],
   ]);
   const seen = new Set();
 
@@ -58,6 +67,28 @@ export function parseMcpArguments(args) {
       error: `unsupported MCP runtime '${runtime}'; supported runtimes: ${supportedRuntimes}`,
     };
   }
+  if (transport !== "stdio" && transport !== "http") {
+    return {
+      error: `unsupported MCP transport '${transport}'; supported transports: stdio, http`,
+    };
+  }
+  if (port !== undefined) {
+    if (
+      transport !== "http" ||
+      !/^\d+$/.test(port) ||
+      Number(port) < 1 ||
+      Number(port) > 65_535
+    ) {
+      return {
+        error:
+          "--port requires the http transport and an integer from 1 to 65535",
+      };
+    }
+    port = Number(port);
+  }
+  if (!inputPath) {
+    return { error: "--package is required" };
+  }
   if (!agentId) {
     return { error: "--agent-id is required" };
   }
@@ -65,7 +96,15 @@ export function parseMcpArguments(args) {
     return { error: "--environment-id is required" };
   }
 
-  return { runtime, agentId, environmentId, vaultId };
+  return {
+    runtime,
+    transport,
+    inputPath,
+    agentId,
+    environmentId,
+    vaultId,
+    ...(port === undefined ? {} : { port }),
+  };
 }
 
 export async function serveMcp(options) {
@@ -76,8 +115,15 @@ export async function serveMcp(options) {
     );
   }
 
-  return serveExecMcpServer({
-    name: `ai-app-${options.agentId}`,
+  const serverOptions = {
+    agentName: options.agentName,
     execute: runtime.createExecutor(options),
-  });
+  };
+  if (options.transport === "http") {
+    return serveManagedAgentsMcpHttp({
+      ...serverOptions,
+      port: options.port,
+    });
+  }
+  return serveManagedAgentsMcpServer(serverOptions);
 }

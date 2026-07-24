@@ -1,0 +1,22 @@
+{
+  "data": [
+    {
+      "id": "event_tool",
+      "type": "agent.mcp_tool_use",
+      "mcp_server_name": "linear",
+      "name": "list_teams",
+      "input": {}
+    },
+    {
+      "id": "event_idle",
+      "type": "session.status_idle",
+      "stop_reason": {
+        "type": "requires_action",
+        "event_ids": [
+          "event_tool"
+        ]
+      }
+    }
+  ],
+  "next_page": null
+}

@@ -59,17 +59,31 @@ function composeMcpConfiguration(payload, resource, resourcesById) {
     );
   }
 
-  if (
-    packageTools?.some(
-      (tool) =>
-        tool !== null &&
-        typeof tool === "object" &&
-        tool.type === "mcp_toolset",
-    )
-  ) {
-    throw new Error(
-      `resource '${resource.id}': implementation package must not define MCP toolsets; reference MCPServer resources in app.yaml`,
-    );
+  const packageMcpToolsets = new Map();
+  for (const tool of packageTools || []) {
+    if (
+      tool === null ||
+      typeof tool !== "object" ||
+      tool.type !== "mcp_toolset"
+    ) {
+      continue;
+    }
+
+    const serverName = tool.mcp_server_name;
+    if (
+      typeof serverName !== "string" ||
+      !toolReferences.some((reference) => reference.ref === serverName)
+    ) {
+      throw new Error(
+        `resource '${resource.id}': implementation package MCP toolset must match an MCPServer referenced in app.yaml`,
+      );
+    }
+    if (packageMcpToolsets.has(serverName)) {
+      throw new Error(
+        `resource '${resource.id}': implementation package defines MCP toolset '${serverName}' more than once`,
+      );
+    }
+    packageMcpToolsets.set(serverName, tool);
   }
 
   if (toolReferences.length === 0) {
@@ -96,16 +110,26 @@ function composeMcpConfiguration(payload, resource, resourcesById) {
       name: server.id,
       url: server.connection.url,
     });
-    mcpToolsets.push({
-      type: "mcp_toolset",
-      mcp_server_name: server.id,
-    });
+    mcpToolsets.push(
+      packageMcpToolsets.get(server.id) || {
+        type: "mcp_toolset",
+        mcp_server_name: server.id,
+      },
+    );
   }
 
   return {
     ...payload,
     mcp_servers: mcpServers,
-    tools: [...(packageTools || []), ...mcpToolsets],
+    tools: [
+      ...(packageTools || []).filter(
+        (tool) =>
+          tool === null ||
+          typeof tool !== "object" ||
+          tool.type !== "mcp_toolset",
+      ),
+      ...mcpToolsets,
+    ],
   };
 }
 
