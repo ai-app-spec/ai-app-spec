@@ -6,6 +6,7 @@ import path from "node:path";
 import { appManifestSchema } from "@ai-app-spec/spec/v0.1";
 import { parseDocument } from "yaml";
 import { deploy, parseDeployArguments } from "./commands/deploy/index.js";
+import { parseMcpArguments, serveMcp } from "./commands/mcp/index.js";
 
 const manifestFilename = "app.yaml";
 
@@ -15,6 +16,7 @@ function usage() {
       "Usage:",
       "  aiappctl validate --package=<bundle-directory|app.yaml>",
       "  aiappctl deploy --runtime <claude|gemini> --package=<bundle-directory|app.yaml> [--project <google-cloud-project>] [--environment-id <id>] [--vault-id <id>]",
+      "  aiappctl mcp serve --runtime claude --agent-id <id> --environment-id <id> [--vault-id <id>]",
       "  aiappctl digest <file>",
     ].join("\n"),
   );
@@ -185,6 +187,24 @@ async function main() {
   if (command === "digest" && args.length === 1) {
     try {
       console.log(await digest(args[0]));
+    } catch (error) {
+      console.error(`aiappctl: ${error.message}`);
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (command === "mcp") {
+    const parsed = parseMcpArguments(args);
+    if (parsed.error) {
+      console.error(`aiappctl: ${parsed.error}`);
+      usage();
+      process.exitCode = 2;
+      return;
+    }
+
+    try {
+      await serveMcp(parsed);
     } catch (error) {
       console.error(`aiappctl: ${error.message}`);
       process.exitCode = 1;

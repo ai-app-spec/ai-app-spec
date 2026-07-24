@@ -65,6 +65,33 @@ Installing specialized AI capability should become an (easy) deployment decision
 
 AI App Spec is an early proposal. The first milestone is intentionally small, consisting of a minimal schema, a handful of useful example apps, and a reference CLI demonstrating deployment through a provider-neutral runtime interface. The goal is to make the contract concrete, learn from working implementations, and develop the specification in public.
 
+## Call a deployed Claude agent from Claude Code
+
+The reference CLI can expose one deployed Claude Managed Agent as a local stdio MCP server with a single `exec` tool. Each tool call creates a fresh session, waits for it to finish, and returns its text response.
+
+Add the server to Claude Code using the Agent and environment IDs returned or verified during deployment:
+
+```sh
+claude mcp add --transport stdio --scope local hello-claude -- \
+  bun "$PWD/src/aiappctl/cli.js" mcp serve \
+  --runtime claude \
+  --agent-id agent_... \
+  --environment-id env_...
+```
+
+If the Agent uses authenticated MCP servers, also pass its conforming vault:
+
+```sh
+claude mcp add --transport stdio --scope local product-manager -- \
+  bun "$PWD/src/aiappctl/cli.js" mcp serve \
+  --runtime claude \
+  --agent-id agent_... \
+  --environment-id env_... \
+  --vault-id vlt_...
+```
+
+Start Claude Code with `ANTHROPIC_API_KEY` in its environment, then use `/mcp` to confirm that the server exposes `exec`. This MVP creates an independent session for every call and does not handle client-side tool approvals.
+
 ## Further reading
 
 - [Concepts: AI applications, packages, and runtimes](docs/concepts.md)

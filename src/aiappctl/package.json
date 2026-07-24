@@ -14,7 +14,9 @@
   },
   "dependencies": {
     "@ai-app-spec/spec": "file:../../spec",
+    "@modelcontextprotocol/sdk": "^1.25.0",
     "google-auth-library": "^10.9.0",
-    "yaml": "^2.8.1"
+    "yaml": "^2.8.1",
+    "zod": "^4.4.3"
   }
 }
