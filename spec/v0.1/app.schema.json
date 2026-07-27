@@ -88,20 +88,54 @@
       "additionalProperties": false
     },
     "Requirements": {
-      "type": "object",
-      "properties": {
-        "secrets": {
-          "minItems": 1,
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SecretRequirement"
-          }
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "secrets": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SecretRequirement"
+              }
+            },
+            "executionEnvironments": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExecutionEnvironmentRequirement"
+              }
+            }
+          },
+          "required": [
+            "secrets"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "secrets": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SecretRequirement"
+              }
+            },
+            "executionEnvironments": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExecutionEnvironmentRequirement"
+              }
+            }
+          },
+          "required": [
+            "executionEnvironments"
+          ],
+          "additionalProperties": false
         }
-      },
-      "required": [
-        "secrets"
-      ],
-      "additionalProperties": false
+      ]
     },
     "SecretRequirement": {
       "type": "object",
@@ -117,6 +151,35 @@
       "required": [
         "id"
       ],
+      "additionalProperties": false
+    },
+    "ExecutionEnvironmentRequirement": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "networking": {
+          "$ref": "#/$defs/ExecutionEnvironmentNetworkingRequirement"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "ExecutionEnvironmentNetworkingRequirement": {
+      "type": "object",
+      "properties": {
+        "mcpServers": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
       "additionalProperties": false
     },
     "Resource": {
@@ -139,6 +202,9 @@
           "type": "string",
           "const": "Agent"
         },
+        "executionEnvironment": {
+          "$ref": "#/$defs/ExecutionEnvironmentReference"
+        },
         "tools": {
           "minItems": 1,
           "type": "array",
@@ -154,6 +220,18 @@
         "id",
         "kind",
         "implementation"
+      ],
+      "additionalProperties": false
+    },
+    "ExecutionEnvironmentReference": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "ref"
       ],
       "additionalProperties": false
     },

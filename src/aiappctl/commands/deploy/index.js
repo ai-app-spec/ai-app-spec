@@ -6,6 +6,7 @@ const supportedRuntimes = [...runtimeAdapters.keys()].join(", ");
 export function parseDeployArguments(args) {
   let inputPath;
   let runtime;
+  let environmentId;
   let vaultId;
 
   for (let index = 0; index < args.length; index += 1) {
@@ -14,6 +15,7 @@ export function parseDeployArguments(args) {
     if (
       argument === "--package" ||
       argument === "--runtime" ||
+      argument === "--environment-id" ||
       argument === "--vault-id"
     ) {
       const value = args[index + 1];
@@ -31,6 +33,11 @@ export function parseDeployArguments(args) {
           return { error: "--runtime may only be specified once" };
         }
         runtime = value;
+      } else if (argument === "--environment-id") {
+        if (environmentId !== undefined) {
+          return { error: "--environment-id may only be specified once" };
+        }
+        environmentId = value;
       } else if (argument === "--vault-id") {
         if (vaultId !== undefined) {
           return { error: "--vault-id may only be specified once" };
@@ -75,6 +82,18 @@ export function parseDeployArguments(args) {
       continue;
     }
 
+    if (argument.startsWith("--environment-id=")) {
+      if (environmentId !== undefined) {
+        return { error: "--environment-id may only be specified once" };
+      }
+      environmentId =
+        argument.slice("--environment-id=".length) || undefined;
+      if (!environmentId) {
+        return { error: "--environment-id requires a value" };
+      }
+      continue;
+    }
+
     return { error: `unexpected argument '${argument}'` };
   }
 
@@ -93,6 +112,7 @@ export function parseDeployArguments(args) {
   return {
     inputPath,
     runtime,
+    environmentId,
     vaultId,
   };
 }
