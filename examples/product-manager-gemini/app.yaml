@@ -1,0 +1,41 @@
+apiVersion: app-spec.ai/v0.1
+kind: App
+
+metadata:
+  name: product-manager-gemini
+  version: 0.1.0
+  description: Synthesizes product insights from connected customer and product data.
+
+spec:
+  entrypoint: product-manager
+  requirements:
+    secrets:
+      - id: linear-access-token
+        description: Linear API key for the Linear MCP server.
+    executionEnvironments:
+      - id: product-manager-sandbox
+        description: Isolated sandbox able to reach the agent's declared MCP servers.
+        networking:
+          mcpServers: true
+  resources:
+    - id: product-manager
+      kind: Agent
+      executionEnvironment:
+        ref: product-manager-sandbox
+      tools:
+        - ref: linear
+      implementation:
+        format: google.com/managed-agent:v1
+        package:
+          location: ./packages/product-manager.agentpkg.yaml
+          digest: sha256:d4e2491dbc464af07e73e16c595d7976a29f02aef42f4475f5d9638d9f0d7772
+
+    - id: linear
+      kind: MCPServer
+      connection:
+        type: url
+        url: https://mcp.linear.app/mcp
+      authentication:
+        type: bearer
+        secret:
+          ref: linear-access-token

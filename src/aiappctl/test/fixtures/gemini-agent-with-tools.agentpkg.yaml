@@ -1,0 +1,5 @@
+base_agent: antigravity-preview-05-2026
+description: A product manager with a native Google tool.
+system_instruction: Synthesize product insights.
+tools:
+  - type: google_search

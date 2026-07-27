@@ -7,12 +7,33 @@ const runtimeAdapters = new Map([
 ]);
 const supportedRuntimes = [...runtimeAdapters.keys()].join(", ");
 
+function addSecretBinding(bindings, value) {
+  const separator = value.indexOf("=");
+  if (separator <= 0 || separator === value.length - 1) {
+    return {
+      error:
+        "--secret-binding requires <secret-requirement-id>=<provider-secret-version>",
+    };
+  }
+
+  const requirementId = value.slice(0, separator);
+  if (bindings.has(requirementId)) {
+    return {
+      error: `--secret-binding for '${requirementId}' may only be specified once`,
+    };
+  }
+
+  bindings.set(requirementId, value.slice(separator + 1));
+  return {};
+}
+
 export function parseDeployArguments(args) {
   let inputPath;
   let runtime;
   let environmentId;
   let projectId;
   let vaultId;
+  const secretBindings = new Map();
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -22,7 +43,8 @@ export function parseDeployArguments(args) {
       argument === "--runtime" ||
       argument === "--environment-id" ||
       argument === "--project" ||
-      argument === "--vault-id"
+      argument === "--vault-id" ||
+      argument === "--secret-binding"
     ) {
       const value = args[index + 1];
       if (!value || value.startsWith("--")) {
@@ -54,6 +76,11 @@ export function parseDeployArguments(args) {
           return { error: "--vault-id may only be specified once" };
         }
         vaultId = value;
+      } else if (argument === "--secret-binding") {
+        const result = addSecretBinding(secretBindings, value);
+        if (result.error) {
+          return result;
+        }
       }
 
       index += 1;
@@ -116,6 +143,15 @@ export function parseDeployArguments(args) {
       continue;
     }
 
+    if (argument.startsWith("--secret-binding=")) {
+      const value = argument.slice("--secret-binding=".length);
+      const result = addSecretBinding(secretBindings, value);
+      if (result.error) {
+        return result;
+      }
+      continue;
+    }
+
     return { error: `unexpected argument '${argument}'` };
   }
 
@@ -136,6 +172,7 @@ export function parseDeployArguments(args) {
     runtime,
     environmentId,
     projectId,
+    secretBindings,
     vaultId,
   };
 }

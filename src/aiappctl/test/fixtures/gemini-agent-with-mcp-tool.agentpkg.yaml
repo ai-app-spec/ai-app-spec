@@ -1,0 +1,7 @@
+base_agent: antigravity-preview-05-2026
+description: Invalid package-owned MCP tool.
+system_instruction: Synthesize product insights.
+tools:
+  - type: mcp_server
+    name: linear
+    url: https://mcp.linear.app/mcp
