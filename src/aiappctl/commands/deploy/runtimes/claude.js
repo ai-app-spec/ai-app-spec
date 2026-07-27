@@ -5,6 +5,7 @@ const ANTHROPIC_MANAGED_AGENT_FORMAT = "anthropic.com/managed-agent:v1";
 const ANTHROPIC_API_VERSION = "2023-06-01";
 const ANTHROPIC_MANAGED_AGENTS_BETA = "managed-agents-2026-04-01";
 const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
+const ANTHROPIC_MAX_MCP_SERVERS = 20;
 
 function parseImplementationPackage(source, packagePath, resourceId) {
   const document = parseDocument(source, {
@@ -34,11 +35,95 @@ function parseImplementationPackage(source, packagePath, resourceId) {
   return payload;
 }
 
+function composeMcpConfiguration(payload, resource, resourcesById) {
+  const toolReferences = resource.tools || [];
+
+  if (toolReferences.length > ANTHROPIC_MAX_MCP_SERVERS) {
+    throw new Error(
+      `resource '${resource.id}': Claude Managed Agents supports at most ${ANTHROPIC_MAX_MCP_SERVERS} MCP servers, found ${toolReferences.length}`,
+    );
+  }
+
+  if (Object.hasOwn(payload, "mcp_servers")) {
+    throw new Error(
+      `resource '${resource.id}': implementation package must not define 'mcp_servers'; declare MCPServer resources in app.yaml`,
+    );
+  }
+
+  const packageTools = payload.tools;
+  if (packageTools !== undefined && !Array.isArray(packageTools)) {
+    throw new Error(
+      `resource '${resource.id}': implementation package field 'tools' must be an array`,
+    );
+  }
+
+  if (
+    packageTools?.some(
+      (tool) =>
+        tool !== null &&
+        typeof tool === "object" &&
+        tool.type === "mcp_toolset",
+    )
+  ) {
+    throw new Error(
+      `resource '${resource.id}': implementation package must not define MCP toolsets; reference MCPServer resources in app.yaml`,
+    );
+  }
+
+  if (toolReferences.length === 0) {
+    return payload;
+  }
+
+  const mcpServers = [];
+  const mcpToolsets = [];
+  for (const toolReference of toolReferences) {
+    const server = resourcesById.get(toolReference.ref);
+    if (!server) {
+      throw new Error(
+        `resource '${resource.id}': referenced tool resource '${toolReference.ref}' does not exist`,
+      );
+    }
+    if (server.kind !== "MCPServer") {
+      throw new Error(
+        `resource '${resource.id}': referenced tool resource '${toolReference.ref}' is not an MCPServer`,
+      );
+    }
+
+    mcpServers.push({
+      type: server.connection.type,
+      name: server.id,
+      url: server.connection.url,
+    });
+    mcpToolsets.push({
+      type: "mcp_toolset",
+      mcp_server_name: server.id,
+    });
+  }
+
+  return {
+    ...payload,
+    mcp_servers: mcpServers,
+    tools: [...(packageTools || []), ...mcpToolsets],
+  };
+}
+
 async function prepareDeployments(validation) {
   const deployments = [];
   const errors = [];
+  const resourcesById = new Map(
+    validation.manifest.spec.resources.map((resource) => [
+      resource.id,
+      resource,
+    ]),
+  );
 
   for (const resource of validation.manifest.spec.resources) {
+    // TODO(resource-dispatch): Have the deploy layer pass only Agent resources
+    // into Claude Agent preparation.
+    if (resource.kind !== "Agent") {
+      continue;
+    }
+
     const { package: implementationPackage } = resource.implementation;
 
     if (!implementationPackage.location.startsWith("./")) {
@@ -58,9 +143,18 @@ async function prepareDeployments(validation) {
 
     try {
       const source = await readFile(packagePath, "utf8");
+      const packagePayload = parseImplementationPackage(
+        source,
+        packagePath,
+        resource.id,
+      );
       deployments.push({
         resource,
-        payload: parseImplementationPackage(source, packagePath, resource.id),
+        payload: composeMcpConfiguration(
+          packagePayload,
+          resource,
+          resourcesById,
+        ),
       });
     } catch (error) {
       errors.push(error.message);

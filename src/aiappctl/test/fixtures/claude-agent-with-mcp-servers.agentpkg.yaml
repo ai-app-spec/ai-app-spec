@@ -1,0 +1,7 @@
+name: Claude Agent With MCP Servers
+model:
+  id: claude-opus-4-8
+mcp_servers:
+  - type: url
+    name: hidden
+    url: https://mcp.example.com/mcp

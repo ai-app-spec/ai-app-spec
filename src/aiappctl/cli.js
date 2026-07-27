@@ -70,12 +70,18 @@ function isWithin(directory, candidate) {
   );
 }
 
-async function validateLocalPackages(manifest, manifestPath) {
+async function validateLocalAgentPackages(manifest, manifestPath) {
   const packageRoot = await realpath(path.dirname(manifestPath));
   const errors = [];
   const resolvedPackages = new Map();
 
   for (const [index, resource] of manifest.spec.resources.entries()) {
+    // TODO(resource-dispatch): Route resources to kind-specific validators
+    // before performing Agent package validation.
+    if (resource.kind !== "Agent") {
+      continue;
+    }
+
     const descriptor = resource.implementation.package;
     if (!descriptor.location.startsWith("./")) {
       continue;
@@ -148,7 +154,7 @@ async function validate(inputPath) {
     };
   }
 
-  const { errors, resolvedPackages } = await validateLocalPackages(
+  const { errors, resolvedPackages } = await validateLocalAgentPackages(
     result.data,
     manifestPath,
   );
