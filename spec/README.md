@@ -86,6 +86,17 @@ export ANTHROPIC_API_KEY="your-api-key"
 bun run deploy --runtime claude --package=../../examples/hello-claude
 ```
 
+Deploy the Gemini Enterprise Agent Platform Managed Agents example using
+Google Application Default Credentials:
+
+```sh
+gcloud auth application-default login
+bun run deploy \
+  --runtime gemini \
+  --package=../../examples/hello-gemini \
+  --project your-google-cloud-project
+```
+
 Deploy the authenticated Product Manager example using a pre-provisioned Claude vault:
 
 ```sh
@@ -101,7 +112,15 @@ The vault must belong to the Anthropic workspace selected by `ANTHROPIC_API_KEY`
 
 The environment must belong to the same Anthropic workspace and must not be archived. When `networking.mcpServers` is required, an Anthropic cloud environment must use unrestricted networking or limited networking with `allow_mcp_servers` enabled. The CLI cannot verify self-hosted egress policy and therefore rejects self-hosted environments for this requirement. It verifies the binding but does not create, update, archive, or delete environments.
 
-`deploy` selects a provider adapter from each Agent resource's implementation format. The only currently supported runtime is `claude`, which accepts `anthropic.com/managed-agent:v1` packages stored inside the app bundle. The adapter parses the package YAML and sends it to Anthropic's `POST /v1/agents` endpoint using the Managed Agents beta API. Every Agent resource must use that format when `--runtime claude` is selected; deployment fails during preflight if any resource declares a different format.
+`deploy` selects a provider adapter from each Agent resource's implementation format. The `claude` runtime accepts `anthropic.com/managed-agent:v1` packages stored inside the app bundle. The adapter parses the package YAML and sends it to Anthropic's `POST /v1/agents` endpoint using the Managed Agents beta API. Every Agent resource must use that format when `--runtime claude` is selected; deployment fails during preflight if any resource declares a different format.
+
+The experimental `gemini` runtime accepts `google.com/managed-agent:v1`
+packages and sends them to the Gemini Enterprise Agent Platform Managed Agents
+API in the `global` location. The adapter uses the Agent resource ID as the
+Google Agent ID, authenticates with Google Application Default Credentials,
+and waits for the create operation to complete before retrieving the Agent.
+The Google Managed Agents API is currently a Pre-GA service intended for
+testing and evaluation.
 
 During Claude deployment, each Agent's referenced `MCPServer` resources are composed into the provider request as `mcp_servers` entries with matching `mcp_toolset` entries. MCP authentication is not included in the reusable Agent definition. If any referenced MCP server declares authentication, `--vault-id` is required. Before creating an Agent, the adapter retrieves that vault and verifies from credential metadata that every authenticated MCP server URL has an active compatible credential. A missing, archived, or non-conforming vault fails deployment before the first provider mutation.
 
