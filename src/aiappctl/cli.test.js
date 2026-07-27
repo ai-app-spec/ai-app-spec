@@ -364,6 +364,45 @@ describe("aiappctl", () => {
     });
   });
 
+  test("rejects unsupported Gemini declarations during preflight", async () => {
+    const validation = helloGeminiValidation();
+    const agent = validation.manifest.spec.resources[0];
+    agent.tools = [{ ref: "linear" }];
+    agent.executionEnvironment = { ref: "product-manager-sandbox" };
+    validation.manifest.spec.requirements = {
+      executionEnvironments: [{ id: "product-manager-sandbox" }],
+    };
+    validation.manifest.spec.resources.push({
+      id: "linear",
+      kind: "MCPServer",
+      connection: {
+        type: "url",
+        url: "https://mcp.linear.app/mcp",
+      },
+    });
+
+    let fetchCalls = 0;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      fetchCalls += 1;
+      return Response.json({ id: "unexpected" });
+    };
+
+    let result;
+    try {
+      result = await deploy(validation, { runtime: "gemini" });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(fetchCalls).toBe(0);
+    expect(result.errors).toEqual([
+      "resource 'greeter': runtime 'gemini' does not support Agent tools",
+      "resource 'linear': runtime 'gemini' does not support MCPServer resources",
+      "execution environment requirement 'product-manager-sandbox': runtime 'gemini' does not support execution environments",
+    ]);
+  });
+
   test("deploys an Agent with referenced MCPServer resources", async () => {
     const requests = [];
     const originalFetch = globalThis.fetch;

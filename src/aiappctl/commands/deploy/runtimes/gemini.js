@@ -46,9 +46,49 @@ function parseImplementationPackage(source, packagePath, resourceId) {
   return payload;
 }
 
+function unsupportedDeclarationErrors(manifest) {
+  const errors = [];
+
+  for (const resource of manifest.spec.resources) {
+    if (resource.kind === "MCPServer") {
+      errors.push(
+        `resource '${resource.id}': runtime 'gemini' does not support MCPServer resources`,
+      );
+      continue;
+    }
+
+    if (resource.tools) {
+      errors.push(
+        `resource '${resource.id}': runtime 'gemini' does not support Agent tools`,
+      );
+    }
+
+    if (
+      resource.executionEnvironment &&
+      !manifest.spec.requirements?.executionEnvironments
+    ) {
+      errors.push(
+        `resource '${resource.id}': runtime 'gemini' does not support execution environments`,
+      );
+    }
+  }
+
+  for (const requirement of
+    manifest.spec.requirements?.executionEnvironments || []) {
+    errors.push(
+      `execution environment requirement '${requirement.id}': runtime 'gemini' does not support execution environments`,
+    );
+  }
+
+  return errors;
+}
+
 async function prepareDeployments(validation) {
   const deployments = [];
-  const errors = [];
+  const errors = unsupportedDeclarationErrors(validation.manifest);
+  if (errors.length > 0) {
+    return { deployments, errors };
+  }
 
   for (const resource of validation.manifest.spec.resources) {
     // TODO(resource-dispatch): Have the deploy layer pass only Agent resources
