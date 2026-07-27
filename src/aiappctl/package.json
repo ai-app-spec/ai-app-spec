@@ -9,7 +9,8 @@
   },
   "scripts": {
     "test": "bun test",
-    "validate": "bun ./cli.js validate"
+    "validate": "bun ./cli.js validate",
+    "deploy": "bun ./cli.js deploy"
   },
   "dependencies": {
     "@ai-app-spec/spec": "file:../../spec",
