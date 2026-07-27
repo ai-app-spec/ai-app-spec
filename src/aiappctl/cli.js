@@ -14,7 +14,7 @@ function usage() {
     [
       "Usage:",
       "  aiappctl validate --package=<bundle-directory|app.yaml>",
-      "  aiappctl deploy --runtime <claude> --package=<bundle-directory|app.yaml>",
+      "  aiappctl deploy --runtime <claude> --package=<bundle-directory|app.yaml> [--environment-id <id>] [--vault-id <id>]",
       "  aiappctl digest <file>",
     ].join("\n"),
   );
@@ -200,6 +200,8 @@ async function main() {
 
   let inputPath;
   let runtime;
+  let environmentId;
+  let vaultId;
   if (command === "deploy") {
     const parsed = parseDeployArguments(args);
     if (parsed.error) {
@@ -208,7 +210,7 @@ async function main() {
       process.exitCode = 2;
       return;
     }
-    ({ inputPath, runtime } = parsed);
+    ({ inputPath, runtime, environmentId, vaultId } = parsed);
   } else {
     inputPath = parsePackageArgument(args);
     if (!inputPath) {
@@ -221,12 +223,31 @@ async function main() {
   try {
     let result = await validate(inputPath);
     if (command === "deploy" && result.errors.length === 0) {
-      result = await deploy(result, { runtime });
+      result = await deploy(result, {
+        runtime,
+        environmentId,
+        vaultId,
+      });
     }
 
     if (result.errors.length > 0) {
       const action = command === "deploy" ? "could not be deployed" : "is invalid";
       console.error(`${result.manifestPath} ${action}:`);
+      if (result.environment) {
+        console.error(
+          `- Claude environment ${result.environment.id} was already verified`,
+        );
+      }
+      if (result.vault) {
+        console.error(
+          `- Claude vault ${result.vault.id} was already verified`,
+        );
+        for (const credential of result.vault.credentials || []) {
+          console.error(
+            `- credential for MCPServer '${credential.resourceId}' was already verified as ${credential.id}`,
+          );
+        }
+      }
       for (const resource of result.deployed || []) {
         console.error(
           `- resource '${resource.id}' was already deployed as ${resource.providerId}`,
@@ -242,6 +263,24 @@ async function main() {
     if (command === "validate") {
       console.log(`${result.manifestPath} is valid`);
       return;
+    }
+
+    if (result.environment) {
+      console.log(`using Claude environment ${result.environment.id}`);
+      for (const binding of result.environment.bindings || []) {
+        console.log(
+          `using environment for execution requirement '${binding.requirementId}'`,
+        );
+      }
+    }
+
+    if (result.vault) {
+      console.log(`using Claude vault ${result.vault.id}`);
+      for (const credential of result.vault.credentials || []) {
+        console.log(
+          `using credential for MCPServer '${credential.resourceId}' as ${credential.id}`,
+        );
+      }
     }
 
     for (const resource of result.deployed) {
