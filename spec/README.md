@@ -78,6 +78,41 @@ bun run validate --package=../../examples/hello-oci
 bun ./cli.js digest ../../examples/hello-claude/packages/greeter.agentpkg.yaml
 ```
 
+Build the Product Manager example as a deployable
+[eve](https://eve.dev/) project:
+
+```sh
+cd src/aiappctl
+bun ./cli.js build \
+  --runtime eve \
+  --package ../../examples/product-manager-eve \
+  --out /tmp/product-manager-eve
+
+cd /tmp/product-manager-eve
+npm install
+npx eve link
+npm run build
+npm run deploy
+```
+
+The experimental `vercel.com/eve:v1` format is a YAML mapping with exactly two
+fields: a Vercel AI Gateway `model` identifier and the Agent's
+`instructions`. The Eve build adapter compiles these fields together with the
+app manifest's Agent identity, referenced MCP servers, execution requirement,
+and logical secret requirements. It emits an Eve project with pinned
+dependencies, one `agent/connections/*.ts` module per MCP server, and an
+`aiappctl.build.json` provenance record.
+
+Bearer secret requirements become environment-variable bindings in generated
+connection modules. For example, `linear-access-token` becomes
+`LINEAR_ACCESS_TOKEN`; the generated project never contains its value. Configure
+the variable in the linked Vercel project before deployment.
+
+The prototype supports exactly one Agent, which must be the app entrypoint. It
+rejects external implementation locations, unsupported package fields,
+unreferenced MCP servers, unused secret requirements, and existing output
+paths rather than silently dropping declarations or overwriting files.
+
 Deploy the Claude Managed Agents example:
 
 ```sh

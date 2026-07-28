@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseBuildArguments } from "./commands/build/index.js";
 import {
   deploy,
   parseDeployArguments,
@@ -278,6 +281,165 @@ describe("aiappctl", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("app.yaml is valid");
     expect(result.stderr).toBe("");
+  });
+
+  test("validates the Eve Product Manager example", async () => {
+    const result = await run(
+      "validate",
+      "--package",
+      path.join(examplesPath, "product-manager-eve"),
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("app.yaml is valid");
+    expect(result.stderr).toBe("");
+  });
+
+  test("builds an Eve project from an app package", async () => {
+    const temporaryDirectory = await mkdtemp(
+      path.join(os.tmpdir(), "aiappctl-eve-build-"),
+    );
+    const outPath = path.join(temporaryDirectory, "product-manager-eve");
+
+    try {
+      const result = await run(
+        "build",
+        "--runtime",
+        "eve",
+        "--package",
+        path.join(examplesPath, "product-manager-eve"),
+        "--out",
+        outPath,
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain(
+        `built App 'product-manager-eve' for eve at ${outPath}`,
+      );
+      expect(result.stderr).toBe("");
+
+      const packageJson = JSON.parse(
+        await readFile(path.join(outPath, "package.json"), "utf8"),
+      );
+      expect(packageJson).toMatchObject({
+        name: "product-manager-eve",
+        version: "0.1.0",
+        engines: { node: ">=24" },
+        scripts: {
+          build: "eve build",
+          deploy: "eve deploy",
+        },
+        dependencies: {
+          ai: "7.0.34",
+          eve: "0.27.8",
+        },
+      });
+
+      expect(
+        await readFile(path.join(outPath, "agent/agent.ts"), "utf8"),
+      ).toContain('model: "anthropic/claude-opus-4.8"');
+      expect(
+        await readFile(
+          path.join(outPath, "agent/connections/linear.ts"),
+          "utf8",
+        ),
+      ).toContain("process.env.LINEAR_ACCESS_TOKEN");
+      expect(
+        await readFile(path.join(outPath, ".env.example"), "utf8"),
+      ).toBe("LINEAR_ACCESS_TOKEN=\n");
+
+      const buildManifest = JSON.parse(
+        await readFile(
+          path.join(outPath, "aiappctl.build.json"),
+          "utf8",
+        ),
+      );
+      expect(buildManifest).toMatchObject({
+        source: {
+          app: "product-manager-eve",
+          entrypoint: "product-manager",
+          implementation: {
+            format: "vercel.com/eve:v1",
+          },
+        },
+        runtime: {
+          name: "eve",
+          version: "0.27.8",
+        },
+        bindings: {
+          secrets: [
+            {
+              requirementId: "linear-access-token",
+              environmentVariable: "LINEAR_ACCESS_TOKEN",
+            },
+          ],
+        },
+      });
+    } finally {
+      await rm(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+
+  test("does not overwrite an existing Eve build output path", async () => {
+    const outPath = await mkdtemp(
+      path.join(os.tmpdir(), "aiappctl-eve-existing-"),
+    );
+
+    try {
+      const result = await run(
+        "build",
+        "--runtime=eve",
+        `--package=${path.join(examplesPath, "product-manager-eve")}`,
+        `--out=${outPath}`,
+      );
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain(
+        `output path already exists: ${outPath}; choose a new --out directory`,
+      );
+    } finally {
+      await rm(outPath, { recursive: true, force: true });
+    }
+  });
+
+  test("parses Eve build arguments", () => {
+    expect(
+      parseBuildArguments([
+        "--runtime=eve",
+        "--package=../../examples/product-manager-eve",
+        "--out=./dist/product-manager-eve",
+      ]),
+    ).toEqual({
+      runtime: "eve",
+      inputPath: "../../examples/product-manager-eve",
+      outPath: "./dist/product-manager-eve",
+    });
+  });
+
+  test("rejects unsupported build formats before writing output", async () => {
+    const temporaryDirectory = await mkdtemp(
+      path.join(os.tmpdir(), "aiappctl-eve-format-"),
+    );
+    const outPath = path.join(temporaryDirectory, "hello-claude");
+
+    try {
+      const result = await run(
+        "build",
+        "--runtime",
+        "eve",
+        "--package",
+        path.join(examplesPath, "hello-claude"),
+        "--out",
+        outPath,
+      );
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain(
+        "build runtime 'eve' does not support implementation format 'anthropic.com/managed-agent:v1'",
+      );
+    } finally {
+      await rm(temporaryDirectory, { recursive: true, force: true });
+    }
   });
 
   test("deploys an Anthropic Managed Agent package", async () => {

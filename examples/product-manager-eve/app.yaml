@@ -1,0 +1,41 @@
+apiVersion: app-spec.ai/v0.1
+kind: App
+
+metadata:
+  name: product-manager-eve
+  version: 0.1.0
+  description: Synthesizes product insights from connected customer and product data.
+
+spec:
+  entrypoint: product-manager
+  requirements:
+    secrets:
+      - id: linear-access-token
+        description: Linear API key for the Linear MCP server.
+    executionEnvironments:
+      - id: product-manager-sandbox
+        description: Isolated sandbox able to reach the agent's declared MCP servers.
+        networking:
+          mcpServers: true
+  resources:
+    - id: product-manager
+      kind: Agent
+      executionEnvironment:
+        ref: product-manager-sandbox
+      tools:
+        - ref: linear
+      implementation:
+        format: vercel.com/eve:v1
+        package:
+          location: ./packages/product-manager.agentpkg.yaml
+          digest: sha256:eba6c179b77dd94b07334bb4e8606e72a40e4fbe96f6c675c8e437124ec0a9b3
+
+    - id: linear
+      kind: MCPServer
+      connection:
+        type: url
+        url: https://mcp.linear.app/mcp
+      authentication:
+        type: bearer
+        secret:
+          ref: linear-access-token

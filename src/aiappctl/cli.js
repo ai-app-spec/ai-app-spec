@@ -5,6 +5,7 @@ import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { appManifestSchema } from "@ai-app-spec/spec/v0.1";
 import { parseDocument } from "yaml";
+import { build, parseBuildArguments } from "./commands/build/index.js";
 import { deploy, parseDeployArguments } from "./commands/deploy/index.js";
 
 const manifestFilename = "app.yaml";
@@ -14,6 +15,7 @@ function usage() {
     [
       "Usage:",
       "  aiappctl validate --package=<bundle-directory|app.yaml>",
+      "  aiappctl build --runtime <eve> --package=<bundle-directory|app.yaml> --out <directory>",
       "  aiappctl deploy --runtime <claude|gemini> --package=<bundle-directory|app.yaml> [--project <google-cloud-project>] [--environment-id <id>] [--vault-id <id>] [--secret-binding <requirement-id>=<provider-secret-version>]",
       "  aiappctl digest <file>",
     ].join("\n"),
@@ -192,7 +194,7 @@ async function main() {
     return;
   }
 
-  if (!new Set(["validate", "deploy"]).has(command)) {
+  if (!new Set(["build", "validate", "deploy"]).has(command)) {
     usage();
     process.exitCode = 2;
     return;
@@ -204,6 +206,7 @@ async function main() {
   let projectId;
   let secretBindings;
   let vaultId;
+  let outPath;
   if (command === "deploy") {
     const parsed = parseDeployArguments(args);
     if (parsed.error) {
@@ -220,6 +223,15 @@ async function main() {
       secretBindings,
       vaultId,
     } = parsed);
+  } else if (command === "build") {
+    const parsed = parseBuildArguments(args);
+    if (parsed.error) {
+      console.error(`aiappctl: ${parsed.error}`);
+      usage();
+      process.exitCode = 2;
+      return;
+    }
+    ({ inputPath, outPath, runtime } = parsed);
   } else {
     inputPath = parsePackageArgument(args);
     if (!inputPath) {
@@ -231,18 +243,27 @@ async function main() {
 
   try {
     let result = await validate(inputPath);
-    if (command === "deploy" && result.errors.length === 0) {
-      result = await deploy(result, {
-        runtime,
-        environmentId,
-        projectId,
-        secretBindings,
-        vaultId,
-      });
+    if (result.errors.length === 0) {
+      if (command === "deploy") {
+        result = await deploy(result, {
+          runtime,
+          environmentId,
+          projectId,
+          secretBindings,
+          vaultId,
+        });
+      } else if (command === "build") {
+        result = await build(result, { runtime, outPath });
+      }
     }
 
     if (result.errors.length > 0) {
-      const action = command === "deploy" ? "could not be deployed" : "is invalid";
+      const action =
+        command === "deploy"
+          ? "could not be deployed"
+          : command === "build"
+            ? "could not be built"
+            : "is invalid";
       console.error(`${result.manifestPath} ${action}:`);
       if (result.environment) {
         console.error(
@@ -273,6 +294,13 @@ async function main() {
 
     if (command === "validate") {
       console.log(`${result.manifestPath} is valid`);
+      return;
+    }
+
+    if (command === "build") {
+      console.log(
+        `built App '${result.manifest.metadata.name}' for ${result.runtime} at ${result.outPath}`,
+      );
       return;
     }
 
