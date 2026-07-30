@@ -1,5 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { parseDocument } from "yaml";
+import {
+  accessSecretVersion,
+  parseSecretVersionResource,
+} from "./gemini/secret-manager.js";
 
 const GOOGLE_MANAGED_AGENT_FORMAT = "google.com/managed-agent:v1";
 const GOOGLE_AIPLATFORM_BASE_URL = "https://aiplatform.googleapis.com";
@@ -9,6 +13,12 @@ const GOOGLE_CLOUD_PLATFORM_SCOPE =
   "https://www.googleapis.com/auth/cloud-platform";
 const DEFAULT_OPERATION_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_OPERATION_TIMEOUT_MS = 5 * 60 * 1_000;
+const GOOGLE_PATCHABLE_AGENT_FIELDS = [
+  "description",
+  "system_instruction",
+  "tools",
+  "base_environment",
+];
 
 function parseImplementationPackage(source, packagePath, resourceId) {
   const document = parseDocument(source, {
@@ -46,49 +56,146 @@ function parseImplementationPackage(source, packagePath, resourceId) {
   return payload;
 }
 
-function unsupportedDeclarationErrors(manifest) {
+function packageTools(packagePayload, resourceId) {
+  if (packagePayload.tools === undefined) {
+    return [];
+  }
+  if (!Array.isArray(packagePayload.tools)) {
+    throw new Error(
+      `resource '${resourceId}': implementation package field 'tools' must be an array`,
+    );
+  }
+  if (
+    packagePayload.tools.some(
+      (tool) =>
+        tool !== null &&
+        typeof tool === "object" &&
+        tool.type === "mcp_server",
+    )
+  ) {
+    throw new Error(
+      `resource '${resourceId}': implementation package must not define MCP server tools; reference MCPServer resources in app.yaml`,
+    );
+  }
+
+  return packagePayload.tools;
+}
+
+function referencedMcpServers(resource, resourcesById) {
+  return (resource.tools || []).map((toolReference) => {
+    const server = resourcesById.get(toolReference.ref);
+    if (!server || server.kind !== "MCPServer") {
+      throw new Error(
+        `resource '${resource.id}': referenced tool resource '${toolReference.ref}' is not an MCPServer`,
+      );
+    }
+    return server;
+  });
+}
+
+function composeBaseEnvironment(
+  resource,
+  packagePayload,
+  mcpServers,
+  executionEnvironmentsById,
+) {
+  if (!resource.executionEnvironment) {
+    if (mcpServers.length > 0) {
+      throw new Error(
+        `resource '${resource.id}': Gemini MCP tools require an execution environment with networking.mcpServers enabled`,
+      );
+    }
+    return packagePayload.base_environment;
+  }
+
+  if (Object.hasOwn(packagePayload, "base_environment")) {
+    throw new Error(
+      `resource '${resource.id}': implementation package must not define 'base_environment' when app.yaml declares an execution environment`,
+    );
+  }
+
+  const requirement = executionEnvironmentsById.get(
+    resource.executionEnvironment.ref,
+  );
+  if (!requirement) {
+    throw new Error(
+      `resource '${resource.id}': execution environment requirement '${resource.executionEnvironment.ref}' does not exist`,
+    );
+  }
+  if (mcpServers.length > 0 && !requirement.networking?.mcpServers) {
+    throw new Error(
+      `resource '${resource.id}': Gemini MCP tools require execution environment '${requirement.id}' to enable networking.mcpServers`,
+    );
+  }
+
+  const domains = [
+    ...new Set(
+      mcpServers.map(
+        (server) => new URL(server.connection.url).hostname,
+      ),
+    ),
+  ];
+  const baseEnvironment = { type: "remote" };
+  if (domains.length > 0) {
+    baseEnvironment.network = {
+      allowlist: domains.map((domain) => ({ domain })),
+    };
+  }
+  return baseEnvironment;
+}
+
+function validateSecretBindings(manifest, requiredSecretIds, options) {
+  const declaredSecretIds = new Set(
+    (manifest.spec.requirements?.secrets || []).map(
+      (requirement) => requirement.id,
+    ),
+  );
+  const providedBindings = options.secretBindings || new Map();
+  const bindings = new Map();
   const errors = [];
 
-  for (const resource of manifest.spec.resources) {
-    if (resource.kind === "MCPServer") {
+  for (const secretId of requiredSecretIds) {
+    const resourceName = providedBindings.get(secretId);
+    if (!resourceName) {
       errors.push(
-        `resource '${resource.id}': runtime 'gemini' does not support MCPServer resources`,
+        `--secret-binding is required for secret requirement '${secretId}'`,
       );
       continue;
     }
 
-    if (resource.tools) {
-      errors.push(
-        `resource '${resource.id}': runtime 'gemini' does not support Agent tools`,
-      );
+    try {
+      bindings.set(secretId, parseSecretVersionResource(resourceName));
+    } catch (error) {
+      errors.push(`secret binding '${secretId}' ${error.message}`);
     }
+  }
 
-    if (
-      resource.executionEnvironment &&
-      !manifest.spec.requirements?.executionEnvironments
-    ) {
+  for (const secretId of providedBindings.keys()) {
+    if (!declaredSecretIds.has(secretId)) {
       errors.push(
-        `resource '${resource.id}': runtime 'gemini' does not support execution environments`,
+        `secret binding '${secretId}' does not match a declared secret requirement`,
       );
     }
   }
 
-  for (const requirement of
-    manifest.spec.requirements?.executionEnvironments || []) {
-    errors.push(
-      `execution environment requirement '${requirement.id}': runtime 'gemini' does not support execution environments`,
-    );
-  }
-
-  return errors;
+  return { bindings, errors };
 }
 
-async function prepareDeployments(validation) {
+async function prepareDeployments(validation, options) {
   const deployments = [];
-  const errors = unsupportedDeclarationErrors(validation.manifest);
-  if (errors.length > 0) {
-    return { deployments, errors };
-  }
+  const errors = [];
+  const requiredSecretIds = new Set();
+  const resourcesById = new Map(
+    validation.manifest.spec.resources.map((resource) => [
+      resource.id,
+      resource,
+    ]),
+  );
+  const executionEnvironmentsById = new Map(
+    (
+      validation.manifest.spec.requirements?.executionEnvironments || []
+    ).map((requirement) => [requirement.id, requirement]),
+  );
 
   for (const resource of validation.manifest.spec.resources) {
     // TODO(resource-dispatch): Have the deploy layer pass only Agent resources
@@ -120,19 +227,43 @@ async function prepareDeployments(validation) {
         packagePath,
         resource.id,
       );
+      const nativeTools = packageTools(packagePayload, resource.id);
+      const mcpServers = referencedMcpServers(resource, resourcesById);
+      for (const server of mcpServers) {
+        if (server.authentication) {
+          requiredSecretIds.add(server.authentication.secret.ref);
+        }
+      }
+      const baseEnvironment = composeBaseEnvironment(
+        resource,
+        packagePayload,
+        mcpServers,
+        executionEnvironmentsById,
+      );
       deployments.push({
         resource,
-        payload: {
-          ...packagePayload,
-          id: resource.id,
-        },
+        packagePayload,
+        nativeTools,
+        mcpServers,
+        baseEnvironment,
       });
     } catch (error) {
       errors.push(error.message);
     }
   }
 
-  return { deployments, errors };
+  const secretBindingValidation = validateSecretBindings(
+    validation.manifest,
+    requiredSecretIds,
+    options,
+  );
+  errors.push(...secretBindingValidation.errors);
+
+  return {
+    deployments,
+    secretBindings: secretBindingValidation.bindings,
+    errors,
+  };
 }
 
 async function readResponseJson(response) {
@@ -231,7 +362,7 @@ function apiUrl(pathname, baseUrl) {
 
 async function googleRequest(
   pathname,
-  { accessToken, baseUrl, body, method },
+  { accessToken, allowNotFound, baseUrl, body, method },
 ) {
   const response = await fetch(apiUrl(pathname, baseUrl), {
     method,
@@ -240,6 +371,9 @@ async function googleRequest(
   });
   const responseBody = await readResponseJson(response);
 
+  if (allowNotFound && response.status === 404) {
+    return undefined;
+  }
   if (!response.ok) {
     throw new Error(googleErrorMessage(response, responseBody));
   }
@@ -284,8 +418,101 @@ async function waitForOperation(operationName, options) {
   }
 }
 
+async function resolveSecretValues(bindings, options) {
+  const values = new Map();
+
+  for (const [secretId, binding] of bindings) {
+    if (binding.projectId !== options.projectId) {
+      throw new Error(
+        `secret binding '${secretId}' must belong to Google Cloud project '${options.projectId}'`,
+      );
+    }
+
+    try {
+      values.set(secretId, await accessSecretVersion(binding, options));
+    } catch (error) {
+      throw new Error(
+        `failed to access secret requirement '${secretId}' (${error.message})`,
+      );
+    }
+  }
+
+  return values;
+}
+
+function deploymentPayload(deployment, secretValues) {
+  const mcpTools = deployment.mcpServers.map((server) => {
+    const tool = {
+      type: "mcp_server",
+      name: server.id,
+      url: server.connection.url,
+    };
+    if (server.authentication) {
+      const secretId = server.authentication.secret.ref;
+      tool.headers = {
+        Authorization: `Bearer ${secretValues.get(secretId)}`,
+      };
+    }
+    return tool;
+  });
+  const tools = [...deployment.nativeTools, ...mcpTools];
+  const payload = {
+    ...deployment.packagePayload,
+    id: deployment.resource.id,
+  };
+  if (tools.length > 0) {
+    payload.tools = tools;
+  }
+  if (deployment.baseEnvironment !== undefined) {
+    payload.base_environment = deployment.baseEnvironment;
+  }
+  return payload;
+}
+
+function validateAgentResponse(agent, resourceId) {
+  if (
+    !agent ||
+    (typeof agent.name !== "string" && typeof agent.id !== "string")
+  ) {
+    throw new Error(
+      `Google returned an invalid Agent response for resource '${resourceId}'`,
+    );
+  }
+  return agent;
+}
+
 async function deployGoogleManagedAgent(deployment, options) {
   const parent = `projects/${encodeURIComponent(options.projectId)}/locations/${GOOGLE_AIPLATFORM_LOCATION}`;
+  const agentPath = `${parent}/agents/${encodeURIComponent(deployment.resource.id)}`;
+  const existingAgent = await googleRequest(agentPath, {
+    ...options,
+    method: "GET",
+    allowNotFound: true,
+  });
+
+  if (existingAgent) {
+    const fields = GOOGLE_PATCHABLE_AGENT_FIELDS.filter((field) =>
+      Object.hasOwn(deployment.payload, field),
+    );
+    if (fields.length === 0) {
+      return validateAgentResponse(existingAgent, deployment.resource.id);
+    }
+
+    const body = { name: existingAgent.name || agentPath };
+    for (const field of fields) {
+      body[field] = deployment.payload[field];
+    }
+    const agent = await googleRequest(
+      `${agentPath}?updateMask=${encodeURIComponent(fields.join(","))}`,
+      {
+        ...options,
+        method: "PATCH",
+        body,
+      },
+    );
+    return validateAgentResponse(agent, deployment.resource.id);
+  }
+
   const operation = await googleRequest(`${parent}/agents`, {
     ...options,
     method: "POST",
@@ -299,27 +526,15 @@ async function deployGoogleManagedAgent(deployment, options) {
 
   await waitForOperation(operation.name, options);
 
-  const agent = await googleRequest(
-    `${parent}/agents/${encodeURIComponent(deployment.resource.id)}`,
-    {
-      ...options,
-      method: "GET",
-    },
-  );
-  if (
-    !agent ||
-    (typeof agent.name !== "string" && typeof agent.id !== "string")
-  ) {
-    throw new Error(
-      `Google returned an invalid Agent response for resource '${deployment.resource.id}'`,
-    );
-  }
-
-  return agent;
+  const agent = await googleRequest(agentPath, {
+    ...options,
+    method: "GET",
+  });
+  return validateAgentResponse(agent, deployment.resource.id);
 }
 
 async function deployToGemini(validation, options) {
-  const prepared = await prepareDeployments(validation);
+  const prepared = await prepareDeployments(validation, options);
   if (prepared.errors.length > 0) {
     return { manifestPath: validation.manifestPath, errors: prepared.errors };
   }
@@ -338,15 +553,31 @@ async function deployToGemini(validation, options) {
   const adapterOptions = {
     ...target,
     baseUrl: options.baseUrl || GOOGLE_AIPLATFORM_BASE_URL,
+    secretManagerBaseUrl: options.secretManagerBaseUrl,
     operationPollIntervalMs:
       options.operationPollIntervalMs ?? DEFAULT_OPERATION_POLL_INTERVAL_MS,
     operationTimeoutMs:
       options.operationTimeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,
   };
   const deployed = [];
+  let secretValues;
+
+  try {
+    secretValues = await resolveSecretValues(
+      prepared.secretBindings,
+      adapterOptions,
+    );
+  } catch (error) {
+    return {
+      manifestPath: validation.manifestPath,
+      deployed,
+      errors: [error.message],
+    };
+  }
 
   for (const deployment of prepared.deployments) {
     try {
+      deployment.payload = deploymentPayload(deployment, secretValues);
       const providerResource = await deployGoogleManagedAgent(
         deployment,
         adapterOptions,
@@ -362,7 +593,7 @@ async function deployToGemini(validation, options) {
         manifestPath: validation.manifestPath,
         deployed,
         errors: [
-          `Google failed to create resource '${deployment.resource.id}' (${error.message})`,
+          `Google failed to deploy resource '${deployment.resource.id}' (${error.message})`,
         ],
       };
     }
