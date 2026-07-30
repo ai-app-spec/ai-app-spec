@@ -108,6 +108,11 @@ connection modules. For example, `linear-access-token` becomes
 `LINEAR_ACCESS_TOKEN`; the generated project never contains its value. Configure
 the variable in the linked Vercel project before deployment.
 
+The generated project does not configure inbound authentication. Eve fails
+closed in production, so its Agent API rejects unauthenticated requests after
+deployment; configure an Eve route authenticator before clients can invoke it.
+The public landing page and health endpoint remain reachable.
+
 The prototype supports exactly one Agent, which must be the app entrypoint. It
 rejects external implementation locations, unsupported package fields,
 unreferenced MCP servers, unused secret requirements, and existing output
