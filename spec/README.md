@@ -89,10 +89,10 @@ bun ./cli.js build \
   --out /tmp/product-manager-eve
 
 cd /tmp/product-manager-eve
-npm install
-npx eve link
-npm run build
-npm run deploy
+bun install
+bunx eve link
+bun run build
+bun run deploy
 ```
 
 The experimental `vercel.com/eve:v1` format is a YAML mapping with exactly two
