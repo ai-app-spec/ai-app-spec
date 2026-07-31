@@ -164,9 +164,12 @@ export ANTHROPIC_API_KEY="your-anthropic-api-key"
 bun run deploy \
   --runtime claude \
   --package=../../examples/product-manager-claude \
+  --agent-id agent_... \
   --environment-id env_... \
   --vault-id vlt_...
 ```
+
+`--agent-id` adopts and updates an existing Anthropic Agent instead of creating a new one. It currently applies to apps containing exactly one Agent resource. The update records installation metadata on the Agent, so subsequent deployments can discover it without repeating the option.
 
 The vault must belong to the Anthropic workspace selected by `ANTHROPIC_API_KEY` and contain an active `static_bearer` or `mcp_oauth` credential for every authenticated MCP server URL referenced by an Agent. The CLI never accepts secret values and does not create, update, archive, or delete vaults or credentials.
 
@@ -194,4 +197,6 @@ Secret Manager version to be applied by deploying again.
 
 During Claude deployment, each Agent's referenced `MCPServer` resources are composed into the provider request as `mcp_servers` entries with matching `mcp_toolset` entries. MCP authentication is not included in the reusable Agent definition. If any referenced MCP server declares authentication, `--vault-id` is required. Before creating an Agent, the adapter retrieves that vault and verifies from credential metadata that every authenticated MCP server URL has an active compatible credential. A missing, archived, or non-conforming vault fails deployment before the first provider mutation.
 
-Environment and vault bindings are consumed through `environment_id` and `vault_ids` on Claude sessions and scheduled deployments. The current CLI does not yet create either, so this implementation verifies the bindings but cannot attach them to an execution yet. Claude environments are mutable and can be archived after verification, so the binding must be checked again when an execution is created. The initial implementation also does not persist or reconcile Agent IDs or resolve external package locations. Each successful invocation therefore creates a new Managed Agent. Provider failures can leave an Agent created earlier in a multi-resource deployment; its ID is reported on stderr.
+Environment and vault bindings are consumed through `environment_id` and `vault_ids` on Claude sessions and scheduled deployments. The current CLI does not yet create either, so this implementation verifies the bindings but cannot attach them to an execution yet. Claude environments are mutable and can be archived after verification, so the binding must be checked again when an execution is created.
+
+Claude Agents created by `aiappctl` carry reserved provider metadata identifying their installation, logical resource, and desired configuration. A later deployment discovers that metadata in the Anthropic workspace, leaves an unchanged Agent alone, or updates the same Agent with optimistic version checking when its configuration changes. No local state file is required. Existing Agents without this metadata are not adopted automatically, and multiple active matches fail before mutation. External package locations remain unsupported. Provider failures can leave an Agent created or updated earlier in a multi-resource deployment; its ID is reported on stderr.

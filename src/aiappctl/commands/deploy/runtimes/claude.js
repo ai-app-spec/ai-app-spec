@@ -1,11 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { parseDocument } from "yaml";
+import {
+  discoverClaudeAgentInstallations,
+  prepareClaudeAgentInstallations,
+  reconcileClaudeAgent,
+} from "./claude/agent.js";
 import { verifyClaudeEnvironment } from "./claude/environment.js";
 import { verifyClaudeVault } from "./claude/vault.js";
 
 const ANTHROPIC_MANAGED_AGENT_FORMAT = "anthropic.com/managed-agent:v1";
-const ANTHROPIC_API_VERSION = "2023-06-01";
-const ANTHROPIC_MANAGED_AGENTS_BETA = "managed-agents-2026-04-01";
 const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
 const ANTHROPIC_MAX_MCP_SERVERS = 20;
 
@@ -166,66 +169,21 @@ async function prepareDeployments(validation) {
   return { deployments, errors };
 }
 
-async function readResponseJson(response) {
-  const source = await response.text();
-  if (!source) {
-    return undefined;
-  }
-
-  try {
-    return JSON.parse(source);
-  } catch {
-    return undefined;
-  }
-}
-
-function anthropicErrorMessage(response, body) {
-  const message =
-    body?.error?.message ||
-    body?.message ||
-    response.statusText ||
-    "request failed";
-  const requestId = body?.request_id || response.headers.get("request-id");
-  const requestSuffix = requestId ? ` (request ${requestId})` : "";
-  return `${response.status}: ${message}${requestSuffix}`;
-}
-
-async function deployAnthropicManagedAgent(
-  deployment,
-  { apiKey, baseUrl },
-) {
-  const endpoint = new URL("/v1/agents", baseUrl);
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": ANTHROPIC_API_VERSION,
-      "anthropic-beta": ANTHROPIC_MANAGED_AGENTS_BETA,
-    },
-    body: JSON.stringify(deployment.payload),
-  });
-  const body = await readResponseJson(response);
-
-  if (!response.ok) {
-    throw new Error(
-      `Anthropic failed to create resource '${deployment.resource.id}' (${anthropicErrorMessage(response, body)})`,
-    );
-  }
-
-  if (!body || typeof body.id !== "string" || body.id.length === 0) {
-    throw new Error(
-      `Anthropic returned an invalid create response for resource '${deployment.resource.id}'`,
-    );
-  }
-
-  return body;
-}
-
 async function deployToClaude(validation, options) {
   const prepared = await prepareDeployments(validation);
   if (prepared.errors.length > 0) {
     return { manifestPath: validation.manifestPath, errors: prepared.errors };
+  }
+
+  const installationId = validation.manifest.metadata.name;
+  let installations;
+  try {
+    installations = prepareClaudeAgentInstallations(
+      prepared.deployments,
+      installationId,
+    );
+  } catch (error) {
+    return { manifestPath: validation.manifestPath, errors: [error.message] };
   }
 
   const apiKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY;
@@ -241,6 +199,7 @@ async function deployToClaude(validation, options) {
     baseUrl: options.baseUrl || ANTHROPIC_BASE_URL,
     environmentId: options.environmentId,
     vaultId: options.vaultId,
+    agentId: options.agentId,
   };
   let environment;
   try {
@@ -266,11 +225,29 @@ async function deployToClaude(validation, options) {
     };
   }
 
+  let existingAgents;
+  try {
+    existingAgents = await discoverClaudeAgentInstallations(
+      installations,
+      installationId,
+      adapterOptions,
+    );
+  } catch (error) {
+    return {
+      manifestPath: validation.manifestPath,
+      environment,
+      vault,
+      deployed: [],
+      errors: [error.message],
+    };
+  }
+
   const deployed = [];
-  for (const deployment of prepared.deployments) {
+  for (const deployment of installations) {
     try {
-      const providerResource = await deployAnthropicManagedAgent(
+      const { providerResource, operation } = await reconcileClaudeAgent(
         deployment,
+        existingAgents.get(deployment.resource.id),
         adapterOptions,
       );
       deployed.push({
@@ -279,6 +256,7 @@ async function deployToClaude(validation, options) {
         format: deployment.resource.implementation.format,
         providerId: providerResource.id,
         providerVersion: providerResource.version,
+        operation,
       });
     } catch (error) {
       return {

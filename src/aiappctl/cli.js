@@ -16,7 +16,7 @@ function usage() {
       "Usage:",
       "  aiappctl validate --package=<bundle-directory|app.yaml>",
       "  aiappctl build --runtime <eve> --package=<bundle-directory|app.yaml> --out <directory>",
-      "  aiappctl deploy --runtime <claude|gemini> --package=<bundle-directory|app.yaml> [--project <google-cloud-project>] [--environment-id <id>] [--vault-id <id>] [--secret-binding <requirement-id>=<provider-secret-version>]",
+      "  aiappctl deploy --runtime <claude|gemini> --package=<bundle-directory|app.yaml> [--agent-id <provider-agent-id>] [--project <google-cloud-project>] [--environment-id <id>] [--vault-id <id>] [--secret-binding <requirement-id>=<provider-secret-version>]",
       "  aiappctl digest <file>",
     ].join("\n"),
   );
@@ -207,6 +207,7 @@ async function main() {
   let secretBindings;
   let vaultId;
   let outPath;
+  let agentId;
   if (command === "deploy") {
     const parsed = parseDeployArguments(args);
     if (parsed.error) {
@@ -222,6 +223,7 @@ async function main() {
       projectId,
       secretBindings,
       vaultId,
+      agentId,
     } = parsed);
   } else if (command === "build") {
     const parsed = parseBuildArguments(args);
@@ -251,6 +253,7 @@ async function main() {
           projectId,
           secretBindings,
           vaultId,
+          agentId,
         });
       } else if (command === "build") {
         result = await build(result, { runtime, outPath });
@@ -327,8 +330,9 @@ async function main() {
         resource.providerVersion === undefined
           ? ""
           : ` at version ${resource.providerVersion}`;
+      const operation = resource.operation || "deployed";
       console.log(
-        `deployed ${resource.kind} '${resource.id}' as ${resource.providerId}${version}`,
+        `${operation} ${resource.kind} '${resource.id}' as ${resource.providerId}${version}`,
       );
     }
   } catch (error) {
