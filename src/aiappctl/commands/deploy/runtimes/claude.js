@@ -1,10 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { parseDocument } from "yaml";
-import {
-  discoverClaudeAgentInstallations,
-  prepareClaudeAgentInstallations,
-  reconcileClaudeAgent,
-} from "./claude/agent.js";
+import { deployClaudeAgent } from "./claude/agent.js";
 import { verifyClaudeEnvironment } from "./claude/environment.js";
 import { verifyClaudeVault } from "./claude/vault.js";
 
@@ -175,15 +171,13 @@ async function deployToClaude(validation, options) {
     return { manifestPath: validation.manifestPath, errors: prepared.errors };
   }
 
-  const installationId = validation.manifest.metadata.name;
-  let installations;
-  try {
-    installations = prepareClaudeAgentInstallations(
-      prepared.deployments,
-      installationId,
-    );
-  } catch (error) {
-    return { manifestPath: validation.manifestPath, errors: [error.message] };
+  if (options.agentId && prepared.deployments.length !== 1) {
+    return {
+      manifestPath: validation.manifestPath,
+      errors: [
+        "--agent-id can only be used when the app contains exactly one Agent resource",
+      ],
+    };
   }
 
   const apiKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY;
@@ -225,29 +219,11 @@ async function deployToClaude(validation, options) {
     };
   }
 
-  let existingAgents;
-  try {
-    existingAgents = await discoverClaudeAgentInstallations(
-      installations,
-      installationId,
-      adapterOptions,
-    );
-  } catch (error) {
-    return {
-      manifestPath: validation.manifestPath,
-      environment,
-      vault,
-      deployed: [],
-      errors: [error.message],
-    };
-  }
-
   const deployed = [];
-  for (const deployment of installations) {
+  for (const deployment of prepared.deployments) {
     try {
-      const { providerResource, operation } = await reconcileClaudeAgent(
+      const { providerResource, operation } = await deployClaudeAgent(
         deployment,
-        existingAgents.get(deployment.resource.id),
         adapterOptions,
       );
       deployed.push({

@@ -169,7 +169,7 @@ bun run deploy \
   --vault-id vlt_...
 ```
 
-`--agent-id` adopts and updates an existing Anthropic Agent instead of creating a new one. It currently applies to apps containing exactly one Agent resource. The update records installation metadata on the Agent, so subsequent deployments can discover it without repeating the option.
+`--agent-id` retrieves and updates an existing Anthropic Agent instead of creating a new one. It currently applies to apps containing exactly one Agent resource and must be supplied on every update.
 
 The vault must belong to the Anthropic workspace selected by `ANTHROPIC_API_KEY` and contain an active `static_bearer` or `mcp_oauth` credential for every authenticated MCP server URL referenced by an Agent. The CLI never accepts secret values and does not create, update, archive, or delete vaults or credentials.
 
@@ -199,4 +199,4 @@ During Claude deployment, each Agent's referenced `MCPServer` resources are comp
 
 Environment and vault bindings are consumed through `environment_id` and `vault_ids` on Claude sessions and scheduled deployments. The current CLI does not yet create either, so this implementation verifies the bindings but cannot attach them to an execution yet. Claude environments are mutable and can be archived after verification, so the binding must be checked again when an execution is created.
 
-Claude Agents created by `aiappctl` carry reserved provider metadata identifying their installation, logical resource, and desired configuration. A later deployment discovers that metadata in the Anthropic workspace, leaves an unchanged Agent alone, or updates the same Agent with optimistic version checking when its configuration changes. No local state file is required. Existing Agents without this metadata are not adopted automatically, and multiple active matches fail before mutation. External package locations remain unsupported. Provider failures can leave an Agent created or updated earlier in a multi-resource deployment; its ID is reported on stderr.
+When `--agent-id` is omitted, Claude deployment creates a new Agent. When it is supplied, the adapter retrieves that Agent, verifies that it exists and is active, and updates it using its current version for optimistic concurrency control. The CLI does not persist or discover Agent IDs, so callers must retain and resupply the ID. External package locations remain unsupported. Provider failures can leave an Agent created or updated earlier in a multi-resource deployment; its ID is reported on stderr.
