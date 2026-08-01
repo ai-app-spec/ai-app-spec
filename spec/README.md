@@ -154,8 +154,8 @@ secret. Google also requires `roles/mcp.toolUser` for the deploying identity
 and associated service account. The CLI resolves the secret before the first
 Agent mutation and configures it as the Linear MCP server's bearer header
 without printing the value. Adding a new Secret Manager version and deploying
-again patches the existing Agent's complete tool configuration with the
-rotated credential.
+again with the same `--agent-id` patches the existing Agent's complete tool
+configuration with the rotated credential.
 
 Deploy the authenticated Product Manager example using a pre-provisioned Claude vault:
 
@@ -179,11 +179,14 @@ The environment must belong to the same Anthropic workspace and must not be arch
 
 The experimental `gemini` runtime accepts `google.com/managed-agent:v1`
 packages and sends them to the Gemini Enterprise Agent Platform Managed Agents
-API in the `global` location. The adapter uses the Agent resource ID as the
-Google Agent ID, authenticates with Google Application Default Credentials,
-and waits for the create operation to complete before retrieving the Agent.
-The Google Managed Agents API is currently a Pre-GA service intended for
-testing and evaluation.
+API in the `global` location. Without `--agent-id`, the adapter creates an
+Agent using the app resource ID as its Google Agent ID. With `--agent-id`, it
+retrieves and updates that exact Agent instead; the option currently applies
+to apps containing exactly one Agent resource and must be supplied on every
+update. The adapter authenticates with Google Application Default Credentials
+and waits for create operations to complete before retrieving the Agent. It
+does not list or discover existing Agents. The Google Managed Agents API is
+currently a Pre-GA service intended for testing and evaluation.
 
 During Gemini deployment, referenced `MCPServer` resources become
 `mcp_server` tools. An Agent's execution environment requirement becomes a
@@ -192,8 +195,8 @@ allowlist contains only the hostnames of that Agent's referenced MCP servers.
 Authenticated servers require a `--secret-binding` from the logical secret ID
 to a Secret Manager version in the deployment project. The adapter resolves
 all required secret values before mutating an Agent and supplies them as MCP
-authorization headers. Existing Agents are updated in place, allowing a new
-Secret Manager version to be applied by deploying again.
+authorization headers. Existing Agents are updated in place only when their
+ID is explicitly supplied with `--agent-id`.
 
 During Claude deployment, each Agent's referenced `MCPServer` resources are composed into the provider request as `mcp_servers` entries with matching `mcp_toolset` entries. MCP authentication is not included in the reusable Agent definition. If any referenced MCP server declares authentication, `--vault-id` is required. Before creating an Agent, the adapter retrieves that vault and verifies from credential metadata that every authenticated MCP server URL has an active compatible credential. A missing, archived, or non-conforming vault fails deployment before the first provider mutation.
 

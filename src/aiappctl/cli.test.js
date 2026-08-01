@@ -603,7 +603,6 @@ describe("aiappctl", () => {
 
   test("deploys a Google Managed Agent package", async () => {
     const requests = [];
-    let agentGets = 0;
     let operationPolls = 0;
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async (url, init) => {
@@ -640,13 +639,6 @@ describe("aiappctl", () => {
         });
       }
       if (pathname.endsWith("/agents/greeter")) {
-        agentGets += 1;
-        if (agentGets === 1) {
-          return Response.json(
-            { error: { message: "not found" } },
-            { status: 404 },
-          );
-        }
         return Response.json({
           name: "projects/test-project/locations/global/agents/greeter",
           id: "greeter",
@@ -680,13 +672,10 @@ describe("aiappctl", () => {
         format: "google.com/managed-agent:v1",
         providerId:
           "projects/test-project/locations/global/agents/greeter",
+        operation: "created",
       },
     ]);
     expect(requests.map((request) => [request.method, request.url])).toEqual([
-      [
-        "GET",
-        "https://aiplatform.googleapis.test/v1beta1/projects/test-project/locations/global/agents/greeter",
-      ],
       [
         "POST",
         "https://aiplatform.googleapis.test/v1beta1/projects/test-project/locations/global/agents",
@@ -720,7 +709,6 @@ describe("aiappctl", () => {
 
   test("deploys Gemini MCP tools with Secret Manager credentials and networking", async () => {
     const requests = [];
-    let agentGets = 0;
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async (url, init) => {
       const request = {
@@ -740,13 +728,6 @@ describe("aiappctl", () => {
         });
       }
       if (parsedUrl.pathname.endsWith("/agents/product-manager")) {
-        agentGets += 1;
-        if (agentGets === 1) {
-          return Response.json(
-            { error: { message: "not found" } },
-            { status: 404 },
-          );
-        }
         return Response.json({
           name: "projects/test-project/locations/global/agents/product-manager",
           id: "product-manager",
@@ -944,21 +925,21 @@ describe("aiappctl", () => {
         });
       }
       if (
-        parsedUrl.pathname.endsWith("/agents/product-manager") &&
+        parsedUrl.pathname.endsWith("/agents/existing-product-manager") &&
         init.method === "GET"
       ) {
         return Response.json({
-          name: "projects/test-project/locations/global/agents/product-manager",
-          id: "product-manager",
+          name: "projects/test-project/locations/global/agents/existing-product-manager",
+          id: "existing-product-manager",
         });
       }
       if (
-        parsedUrl.pathname.endsWith("/agents/product-manager") &&
+        parsedUrl.pathname.endsWith("/agents/existing-product-manager") &&
         init.method === "PATCH"
       ) {
         return Response.json({
-          name: "projects/test-project/locations/global/agents/product-manager",
-          id: "product-manager",
+          name: "projects/test-project/locations/global/agents/existing-product-manager",
+          id: "existing-product-manager",
         });
       }
       return Response.json(
@@ -971,6 +952,7 @@ describe("aiappctl", () => {
     try {
       result = await deploy(productManagerGeminiValidation(), {
         runtime: "gemini",
+        agentId: "existing-product-manager",
         projectId: "test-project",
         accessToken: "test-access-token",
         baseUrl: "https://aiplatform.googleapis.test",
@@ -987,6 +969,11 @@ describe("aiappctl", () => {
     }
 
     expect(result.errors).toEqual([]);
+    expect(result.deployed[0]).toMatchObject({
+      providerId:
+        "projects/test-project/locations/global/agents/existing-product-manager",
+      operation: "updated",
+    });
     expect(requests.some((request) => request.method === "POST")).toBe(false);
     const patchRequest = requests.find(
       (request) => request.method === "PATCH",
@@ -997,6 +984,38 @@ describe("aiappctl", () => {
     expect(patchRequest.body.tools[0].headers.Authorization).toBe(
       "Bearer rotated-linear-token",
     );
+  });
+
+  test("rejects a missing explicitly selected Gemini Managed Agent", async () => {
+    let mutationCalls = 0;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (_url, init) => {
+      if (init.method !== "GET") {
+        mutationCalls += 1;
+      }
+      return Response.json(
+        { error: { message: "not found", status: "NOT_FOUND" } },
+        { status: 404 },
+      );
+    };
+
+    let result;
+    try {
+      result = await deploy(helloGeminiValidation(), {
+        runtime: "gemini",
+        agentId: "missing-agent",
+        projectId: "test-project",
+        accessToken: "test-access-token",
+        baseUrl: "https://aiplatform.googleapis.test",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(mutationCalls).toBe(0);
+    expect(result.errors).toEqual([
+      "Google failed to deploy resource 'greeter' (Google Agent 'missing-agent' does not exist)",
+    ]);
   });
 
   test("deploys an Agent with referenced MCPServer resources", async () => {
@@ -1092,6 +1111,7 @@ describe("aiappctl", () => {
         format: "anthropic.com/managed-agent:v1",
         providerId: "agent_product_manager",
         providerVersion: 1,
+        operation: "created",
       },
     ]);
     expect(requests.map((request) => [request.method, request.url])).toEqual([
@@ -1454,6 +1474,24 @@ describe("aiappctl", () => {
 
     expect(result.error).toBeUndefined();
     expect(result.projectId).toBe("test-project");
+  });
+
+  test("parses and validates a Google Agent id", () => {
+    const parsed = parseDeployArguments([
+      "--runtime=gemini",
+      "--package=./app",
+      "--agent-id=product-manager",
+    ]);
+    const invalid = parseDeployArguments([
+      "--runtime=gemini",
+      "--package=./app",
+      "--agent-id=Product_Manager",
+    ]);
+
+    expect(parsed.agentId).toBe("product-manager");
+    expect(invalid.error).toContain(
+      "--agent-id must be a Google Agent ID",
+    );
   });
 
   test("parses repeatable provider secret bindings", () => {

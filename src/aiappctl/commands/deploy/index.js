@@ -6,7 +6,6 @@ const runtimeAdapters = new Map([
   [geminiRuntime.name, geminiRuntime],
 ]);
 const supportedRuntimes = [...runtimeAdapters.keys()].join(", ");
-const claudeAgentIdPattern = /^agent_[A-Za-z0-9]+$/;
 
 function addSecretBinding(bindings, value) {
   const separator = value.indexOf("=");
@@ -185,10 +184,11 @@ export function parseDeployArguments(args) {
       error: `unsupported runtime '${runtime}'; supported runtimes: ${supportedRuntimes}`,
     };
   }
-  if (agentId && !claudeAgentIdPattern.test(agentId)) {
-    return {
-      error: "--agent-id must be an Anthropic Agent ID beginning with 'agent_'",
-    };
+  if (agentId) {
+    const agentIdError = runtimeAdapters.get(runtime).validateAgentId(agentId);
+    if (agentIdError) {
+      return { error: agentIdError };
+    }
   }
 
   return {

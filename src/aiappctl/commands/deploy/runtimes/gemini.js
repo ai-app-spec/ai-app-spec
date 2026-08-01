@@ -13,12 +13,19 @@ const GOOGLE_CLOUD_PLATFORM_SCOPE =
   "https://www.googleapis.com/auth/cloud-platform";
 const DEFAULT_OPERATION_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_OPERATION_TIMEOUT_MS = 5 * 60 * 1_000;
+const GOOGLE_AGENT_ID_PATTERN = /^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const GOOGLE_PATCHABLE_AGENT_FIELDS = [
   "description",
   "system_instruction",
   "tools",
   "base_environment",
 ];
+
+function validateGoogleAgentId(agentId) {
+  if (!GOOGLE_AGENT_ID_PATTERN.test(agentId)) {
+    return "--agent-id must be a Google Agent ID containing 1-63 lowercase letters, numbers, or hyphens, beginning with a letter and ending with a letter or number";
+  }
+}
 
 function parseImplementationPackage(source, packagePath, resourceId) {
   const document = parseDocument(source, {
@@ -469,10 +476,11 @@ function deploymentPayload(deployment, secretValues) {
   return payload;
 }
 
-function validateAgentResponse(agent, resourceId) {
+function validateAgentResponse(agent, resourceId, expectedAgentPath) {
   if (
     !agent ||
-    (typeof agent.name !== "string" && typeof agent.id !== "string")
+    typeof agent.name !== "string" ||
+    agent.name !== expectedAgentPath
   ) {
     throw new Error(
       `Google returned an invalid Agent response for resource '${resourceId}'`,
@@ -481,37 +489,30 @@ function validateAgentResponse(agent, resourceId) {
   return agent;
 }
 
-async function deployGoogleManagedAgent(deployment, options) {
-  const parent = `projects/${encodeURIComponent(options.projectId)}/locations/${GOOGLE_AIPLATFORM_LOCATION}`;
-  const agentPath = `${parent}/agents/${encodeURIComponent(deployment.resource.id)}`;
-  const existingAgent = await googleRequest(agentPath, {
+function googleAgentParent(projectId) {
+  return `projects/${encodeURIComponent(projectId)}/locations/${GOOGLE_AIPLATFORM_LOCATION}`;
+}
+
+function googleAgentPath(projectId, agentId) {
+  return `${googleAgentParent(projectId)}/agents/${encodeURIComponent(agentId)}`;
+}
+
+async function retrieveGoogleManagedAgent(agentId, resourceId, options) {
+  const agentPath = googleAgentPath(options.projectId, agentId);
+  const agent = await googleRequest(agentPath, {
     ...options,
     method: "GET",
     allowNotFound: true,
   });
-
-  if (existingAgent) {
-    const fields = GOOGLE_PATCHABLE_AGENT_FIELDS.filter((field) =>
-      Object.hasOwn(deployment.payload, field),
-    );
-    if (fields.length === 0) {
-      return validateAgentResponse(existingAgent, deployment.resource.id);
-    }
-
-    const body = { name: existingAgent.name || agentPath };
-    for (const field of fields) {
-      body[field] = deployment.payload[field];
-    }
-    const agent = await googleRequest(
-      `${agentPath}?updateMask=${encodeURIComponent(fields.join(","))}`,
-      {
-        ...options,
-        method: "PATCH",
-        body,
-      },
-    );
-    return validateAgentResponse(agent, deployment.resource.id);
+  if (!agent) {
+    throw new Error(`Google Agent '${agentId}' does not exist`);
   }
+  return validateAgentResponse(agent, resourceId, agentPath);
+}
+
+async function createGoogleManagedAgent(deployment, options) {
+  const parent = googleAgentParent(options.projectId);
+  const agentPath = googleAgentPath(options.projectId, deployment.resource.id);
 
   const operation = await googleRequest(`${parent}/agents`, {
     ...options,
@@ -530,13 +531,72 @@ async function deployGoogleManagedAgent(deployment, options) {
     ...options,
     method: "GET",
   });
-  return validateAgentResponse(agent, deployment.resource.id);
+  return {
+    providerResource: validateAgentResponse(
+      agent,
+      deployment.resource.id,
+      agentPath,
+    ),
+    operation: "created",
+  };
+}
+
+async function updateGoogleManagedAgent(deployment, existingAgent, options) {
+  const fields = GOOGLE_PATCHABLE_AGENT_FIELDS.filter((field) =>
+    Object.hasOwn(deployment.payload, field),
+  );
+  if (fields.length === 0) {
+    return { providerResource: existingAgent, operation: "unchanged" };
+  }
+
+  const body = { name: existingAgent.name };
+  for (const field of fields) {
+    body[field] = deployment.payload[field];
+  }
+  const agent = await googleRequest(
+    `${existingAgent.name}?updateMask=${encodeURIComponent(fields.join(","))}`,
+    {
+      ...options,
+      method: "PATCH",
+      body,
+    },
+  );
+  return {
+    providerResource: validateAgentResponse(
+      agent,
+      deployment.resource.id,
+      existingAgent.name,
+    ),
+    operation: "updated",
+  };
+}
+
+async function deployGoogleManagedAgent(deployment, options) {
+  if (!options.agentId) {
+    return createGoogleManagedAgent(deployment, options);
+  }
+
+  const existingAgent = await retrieveGoogleManagedAgent(
+    options.agentId,
+    deployment.resource.id,
+    options,
+  );
+  return updateGoogleManagedAgent(deployment, existingAgent, options);
 }
 
 async function deployToGemini(validation, options) {
   const prepared = await prepareDeployments(validation, options);
   if (prepared.errors.length > 0) {
     return { manifestPath: validation.manifestPath, errors: prepared.errors };
+  }
+
+  if (options.agentId && prepared.deployments.length !== 1) {
+    return {
+      manifestPath: validation.manifestPath,
+      errors: [
+        "--agent-id can only be used when the app contains exactly one Agent resource",
+      ],
+    };
   }
 
   let target;
@@ -552,6 +612,7 @@ async function deployToGemini(validation, options) {
 
   const adapterOptions = {
     ...target,
+    agentId: options.agentId,
     baseUrl: options.baseUrl || GOOGLE_AIPLATFORM_BASE_URL,
     secretManagerBaseUrl: options.secretManagerBaseUrl,
     operationPollIntervalMs:
@@ -578,7 +639,7 @@ async function deployToGemini(validation, options) {
   for (const deployment of prepared.deployments) {
     try {
       deployment.payload = deploymentPayload(deployment, secretValues);
-      const providerResource = await deployGoogleManagedAgent(
+      const { providerResource, operation } = await deployGoogleManagedAgent(
         deployment,
         adapterOptions,
       );
@@ -587,6 +648,7 @@ async function deployToGemini(validation, options) {
         kind: deployment.resource.kind,
         format: deployment.resource.implementation.format,
         providerId: providerResource.name || providerResource.id,
+        operation,
       });
     } catch (error) {
       return {
@@ -609,5 +671,6 @@ async function deployToGemini(validation, options) {
 export const geminiRuntime = {
   name: "gemini",
   formats: new Set([GOOGLE_MANAGED_AGENT_FORMAT]),
+  validateAgentId: validateGoogleAgentId,
   deploy: deployToGemini,
 };
