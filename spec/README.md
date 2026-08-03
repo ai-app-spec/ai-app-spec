@@ -103,6 +103,12 @@ and logical secret requirements. It emits an Eve project with pinned
 dependencies, one `agent/connections/*.ts` module per MCP server, and an
 `aiappctl.build.json` provenance record.
 
+Rebuilding into the same `--out` directory verifies the SHA-256 digest of every
+previously generated file before applying the new build. It stops on local
+changes, removes obsolete generated files, and preserves unmanaged state such
+as `.vercel/`, `.env.local`, and lockfiles. Older build-manifest schemas must be
+rebuilt into a new output directory.
+
 Bearer secret requirements become environment-variable bindings in generated
 connection modules. For example, `linear-access-token` becomes
 `LINEAR_ACCESS_TOKEN`; the generated project never contains its value. Configure
@@ -115,8 +121,8 @@ The public landing page and health endpoint remain reachable.
 
 The prototype supports exactly one Agent, which must be the app entrypoint. It
 rejects external implementation locations, unsupported package fields,
-unreferenced MCP servers, unused secret requirements, and existing output
-paths rather than silently dropping declarations or overwriting files.
+unreferenced MCP servers, and unused secret requirements rather than silently
+dropping declarations.
 
 Deploy the Claude Managed Agents example:
 

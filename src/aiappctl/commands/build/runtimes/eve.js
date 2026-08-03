@@ -1,8 +1,19 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  mkdir,
+  readFile,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { parseDocument } from "yaml";
 
 const EVE_FORMAT = "vercel.com/eve:v1";
+const BUILD_MANIFEST_FILENAME = "aiappctl.build.json";
+const BUILD_MANIFEST_SCHEMA_VERSION = 2;
+const AIAPPCTL_VERSION = "0.1.0";
 const EVE_VERSION = "0.27.8";
 const AI_SDK_VERSION = "7.0.34";
 const NODE_TYPES_VERSION = "24.1.0";
@@ -156,8 +167,8 @@ This directory is generated output. Rebuild it from the source app package inste
 Node.js 24 or later is required.
 
 \`\`\`sh
-npm install
-npm run dev
+bun install
+bun run dev
 \`\`\`
 
 ${secretSetup}
@@ -167,10 +178,10 @@ Local values may be placed in \`.env.local\`. Do not commit that file.
 ## Deploy to Vercel
 
 \`\`\`sh
-npm install
-npx eve link
-npm run build
-npm run deploy
+bun install
+bunx eve link
+bun run build
+bun run deploy
 \`\`\`
 `;
 }
@@ -180,9 +191,14 @@ function generatedBuildManifest(
   resource,
   secretBindings,
   executionEnvironment,
+  generatedFiles,
 ) {
   return {
-    schemaVersion: 1,
+    schemaVersion: BUILD_MANIFEST_SCHEMA_VERSION,
+    generator: {
+      name: "aiappctl",
+      version: AIAPPCTL_VERSION,
+    },
     source: {
       apiVersion: manifest.apiVersion,
       app: manifest.metadata.name,
@@ -210,7 +226,25 @@ function generatedBuildManifest(
           }
         : null,
     },
+    generatedFiles,
   };
+}
+
+function sha256(contents) {
+  return `sha256:${createHash("sha256").update(contents).digest("hex")}`;
+}
+
+function generatedFileDigests(files) {
+  return Object.fromEntries(
+    [...files.entries()]
+      .sort(([left], [right]) =>
+        left < right ? -1 : left > right ? 1 : 0,
+      )
+      .map(([relativePath, contents]) => [
+        relativePath,
+        sha256(contents),
+      ]),
+  );
 }
 
 async function outputExists(outPath) {
@@ -225,22 +259,228 @@ async function outputExists(outPath) {
   }
 }
 
-async function writeProject(outPath, files) {
-  if (await outputExists(outPath)) {
+function managedDestination(outPath, relativePath) {
+  if (
+    typeof relativePath !== "string" ||
+    relativePath.length === 0 ||
+    relativePath === "." ||
+    relativePath === ".." ||
+    relativePath.startsWith("../") ||
+    relativePath.includes("\\") ||
+    path.posix.isAbsolute(relativePath) ||
+    path.posix.normalize(relativePath) !== relativePath ||
+    relativePath === BUILD_MANIFEST_FILENAME
+  ) {
     throw new Error(
-      `output path already exists: ${outPath}; choose a new --out directory`,
+      `invalid managed file path '${relativePath}' in ${BUILD_MANIFEST_FILENAME}`,
     );
   }
 
-  await mkdir(outPath, { recursive: true });
-  for (const [relativePath, contents] of files) {
-    const destination = path.join(outPath, relativePath);
-    await mkdir(path.dirname(destination), { recursive: true });
-    await writeFile(destination, contents, {
+  return path.join(outPath, ...relativePath.split("/"));
+}
+
+async function atomicWrite(destination, contents) {
+  await mkdir(path.dirname(destination), { recursive: true });
+  const temporaryPath = path.join(
+    path.dirname(destination),
+    `.${path.basename(destination)}.aiappctl-${randomUUID()}.tmp`,
+  );
+
+  try {
+    await writeFile(temporaryPath, contents, {
       encoding: "utf8",
       flag: "wx",
     });
+    await rename(temporaryPath, destination);
+  } finally {
+    try {
+      await unlink(temporaryPath);
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        throw error;
+      }
+    }
   }
+}
+
+function parsePreviousBuildManifest(source, outPath) {
+  let manifest;
+  try {
+    manifest = JSON.parse(source);
+  } catch {
+    throw new Error(
+      `existing ${BUILD_MANIFEST_FILENAME} is not valid JSON: ${outPath}`,
+    );
+  }
+
+  if (manifest?.schemaVersion !== BUILD_MANIFEST_SCHEMA_VERSION) {
+    throw new Error(
+      `existing ${BUILD_MANIFEST_FILENAME} uses unsupported schema version '${manifest?.schemaVersion ?? "missing"}'; rebuild into a new --out directory`,
+    );
+  }
+  if (manifest.runtime?.name !== "eve") {
+    throw new Error(
+      `existing ${BUILD_MANIFEST_FILENAME} is not an Eve build: ${outPath}`,
+    );
+  }
+  if (
+    manifest.generatedFiles === null ||
+    typeof manifest.generatedFiles !== "object" ||
+    Array.isArray(manifest.generatedFiles)
+  ) {
+    throw new Error(
+      `existing ${BUILD_MANIFEST_FILENAME} does not contain generated file digests: ${outPath}`,
+    );
+  }
+
+  for (const [relativePath, digest] of Object.entries(
+    manifest.generatedFiles,
+  )) {
+    managedDestination(outPath, relativePath);
+    if (!/^sha256:[a-f0-9]{64}$/.test(digest)) {
+      throw new Error(
+        `invalid digest for managed file '${relativePath}' in ${BUILD_MANIFEST_FILENAME}`,
+      );
+    }
+  }
+
+  return manifest;
+}
+
+async function readPreviousBuildManifest(outPath) {
+  const manifestPath = path.join(outPath, BUILD_MANIFEST_FILENAME);
+  let source;
+  try {
+    source = await readFile(manifestPath, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      throw new Error(
+        `output path exists without ${BUILD_MANIFEST_FILENAME}: ${outPath}`,
+      );
+    }
+    throw error;
+  }
+  return parsePreviousBuildManifest(source, outPath);
+}
+
+async function verifyManagedFiles(outPath, generatedFiles) {
+  const driftedFiles = [];
+
+  for (const [relativePath, expectedDigest] of Object.entries(
+    generatedFiles,
+  )) {
+    const destination = managedDestination(outPath, relativePath);
+    let contents;
+    try {
+      contents = await readFile(destination);
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        driftedFiles.push(relativePath);
+        continue;
+      }
+      throw error;
+    }
+
+    if (sha256(contents) !== expectedDigest) {
+      driftedFiles.push(relativePath);
+    }
+  }
+
+  if (driftedFiles.length > 0) {
+    throw new Error(
+      `generated Eve project has drifted in managed file${driftedFiles.length === 1 ? "" : "s"}: ${driftedFiles.map((relativePath) => `'${relativePath}'`).join(", ")}`,
+    );
+  }
+}
+
+async function assertNewManagedPathsAvailable(
+  outPath,
+  previousFiles,
+  nextFiles,
+) {
+  const conflicts = [];
+  for (const relativePath of nextFiles.keys()) {
+    if (
+      !Object.hasOwn(previousFiles, relativePath) &&
+      (await outputExists(managedDestination(outPath, relativePath)))
+    ) {
+      conflicts.push(relativePath);
+    }
+  }
+
+  if (conflicts.length > 0) {
+    throw new Error(
+      `cannot create generated file${conflicts.length === 1 ? "" : "s"} over unmanaged path${conflicts.length === 1 ? "" : "s"}: ${conflicts.map((relativePath) => `'${relativePath}'`).join(", ")}`,
+    );
+  }
+}
+
+async function createProject(outPath, compiled) {
+  await mkdir(outPath, { recursive: true });
+  for (const [relativePath, contents] of compiled.files) {
+    await atomicWrite(
+      managedDestination(outPath, relativePath),
+      contents,
+    );
+  }
+  await atomicWrite(
+    path.join(outPath, BUILD_MANIFEST_FILENAME),
+    compiled.buildManifestSource,
+  );
+}
+
+async function reconcileProject(outPath, compiled) {
+  const outStat = await stat(outPath);
+  if (!outStat.isDirectory()) {
+    throw new Error(`output path is not a directory: ${outPath}`);
+  }
+
+  const previousManifest = await readPreviousBuildManifest(outPath);
+  if (previousManifest.source?.app !== compiled.buildManifest.source.app) {
+    throw new Error(
+      `output path belongs to App '${previousManifest.source?.app ?? "unknown"}', not '${compiled.buildManifest.source.app}'`,
+    );
+  }
+
+  await verifyManagedFiles(outPath, previousManifest.generatedFiles);
+  await assertNewManagedPathsAvailable(
+    outPath,
+    previousManifest.generatedFiles,
+    compiled.files,
+  );
+
+  for (const [relativePath, contents] of compiled.files) {
+    const nextDigest = compiled.buildManifest.generatedFiles[relativePath];
+    if (previousManifest.generatedFiles[relativePath] === nextDigest) {
+      continue;
+    }
+    await atomicWrite(
+      managedDestination(outPath, relativePath),
+      contents,
+    );
+  }
+
+  for (const relativePath of Object.keys(
+    previousManifest.generatedFiles,
+  )) {
+    if (!compiled.files.has(relativePath)) {
+      await unlink(managedDestination(outPath, relativePath));
+    }
+  }
+
+  await atomicWrite(
+    path.join(outPath, BUILD_MANIFEST_FILENAME),
+    compiled.buildManifestSource,
+  );
+}
+
+async function writeProject(outPath, compiled) {
+  if (!(await outputExists(outPath))) {
+    await createProject(outPath, compiled);
+    return;
+  }
+
+  await reconcileProject(outPath, compiled);
 }
 
 async function compile(validation) {
@@ -376,19 +616,6 @@ async function compile(validation) {
       generatedReadme(manifest, secretBindings),
     ],
     [
-      "aiappctl.build.json",
-      `${JSON.stringify(
-        generatedBuildManifest(
-          manifest,
-          resource,
-          secretBindings,
-          executionEnvironment,
-        ),
-        null,
-        2,
-      )}\n`,
-    ],
-    [
       "agent/agent.ts",
       [
         'import { defineAgent } from "eve";',
@@ -431,7 +658,19 @@ async function compile(validation) {
     );
   }
 
-  return { files };
+  const buildManifest = generatedBuildManifest(
+    manifest,
+    resource,
+    secretBindings,
+    executionEnvironment,
+    generatedFileDigests(files),
+  );
+
+  return {
+    files,
+    buildManifest,
+    buildManifestSource: `${JSON.stringify(buildManifest, null, 2)}\n`,
+  };
 }
 
 export const eveRuntime = {
@@ -442,14 +681,17 @@ export const eveRuntime = {
     try {
       const compiled = await compile(validation);
       const outPath = path.resolve(options.outPath);
-      await writeProject(outPath, compiled.files);
+      await writeProject(outPath, compiled);
 
       return {
         manifestPath: validation.manifestPath,
         manifest: validation.manifest,
         outPath,
         runtime: this.name,
-        generatedFiles: [...compiled.files.keys()],
+        generatedFiles: [
+          ...compiled.files.keys(),
+          BUILD_MANIFEST_FILENAME,
+        ],
         errors: [],
       };
     } catch (error) {
