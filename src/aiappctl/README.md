@@ -1,6 +1,6 @@
 # aiappctl
 
-`aiappctl` is the reference command-line interface for validating, building, and deploying [AI App Spec](../../spec/README.md) packages. It demonstrates how runtime adapters can interpret provider-neutral app resources and bind them to provider-specific infrastructure.
+`aiappctl` is the command-line interface for validating, building, and deploying [AI App Spec](../../spec/README.md) packages. It demonstrates how runtime adapters can interpret provider-neutral app resources and bind them to provider-specific infrastructure.
 
 The CLI is an early reference implementation. Its supported package formats, runtimes, and workflows may change while version 0.1 of the specification is a draft.
 
@@ -19,6 +19,8 @@ The CLI is an early reference implementation. Its supported package formats, run
 - [Development](#development)
 - [Related documentation](#related-documentation)
 
+
+
 ## Setup
 
 [Bun](https://bun.sh/) is required. Install the CLI dependencies from this directory:
@@ -32,6 +34,8 @@ The examples below assume the current directory is `src/aiappctl`.
 
 ## Commands
 
+
+
 ### Validate
 
 Validate an unpacked app bundle or an individual `app.yaml` manifest:
@@ -40,7 +44,9 @@ Validate an unpacked app bundle or an individual `app.yaml` manifest:
 bun run validate --package=../../examples/hello-oci
 ```
 
-Validation parses YAML, applies the versioned app schema, and checks cross-resource invariants. For package-relative Agent implementations, it also ensures the package remains inside the app bundle, exists as a file, and matches its declared SHA-256 digest. External implementation locations are not fetched. Archive creation and validation are not yet supported.
+Validation parses YAML, applies the versioned app schema, and checks cross-resource invariants. For package-relative Agent implementations, it also ensures the package remains inside the app bundle, exists as a file, and matches its declared SHA-256 digest. 
+
+*External implementation locations are not fetched. Archive creation and validation are not yet supported.*
 
 ### Digest
 
@@ -83,11 +89,15 @@ Provider failures can leave an Agent created or updated earlier in a multi-resou
 
 ## Runtimes
 
-| Runtime | Operation | Implementation format |
-| --- | --- | --- |
-| Claude Managed Agents | Deploy | `anthropic.com/managed-agent:v1` |
-| Gemini Enterprise Agent Platform | Deploy | `google.com/managed-agent:v1` |
-| Vercel Eve | Build | `vercel.com/eve:v1` |
+
+| Runtime                          | Operation | Implementation format            |
+| -------------------------------- | --------- | -------------------------------- |
+| Claude Managed Agents            | Deploy    | `anthropic.com/managed-agent:v1` |
+| Gemini Enterprise Agent Platform | Deploy    | `google.com/managed-agent:v1`    |
+| Vercel Eve                       | Build     | `vercel.com/eve:v1`              |
+
+
+
 
 ### Claude Managed Agents
 
@@ -105,7 +115,7 @@ The Claude adapter accepts `anthropic.com/managed-agent:v1` packages stored insi
 Referenced `MCPServer` resources become `mcp_servers` entries with matching `mcp_toolset` entries. MCP authentication is not embedded in the reusable Agent definition. Deploy the authenticated Product Manager example with pre-provisioned environment and vault bindings:
 
 ```sh
-export ANTHROPIC_API_KEY="your-anthropic-api-key"
+export ANTHROPIC_API_KEY="your-api-key"
 bun run deploy \
   --runtime claude \
   --package=../../examples/product-manager-claude \
@@ -196,7 +206,7 @@ bun install
 bun test
 ```
 
-The CLI depends on the local package in [`../../spec`](../../spec/README.md). Changes to schema behavior should include the corresponding specification tests and generated-schema check.
+The CLI depends on the local package in `[../../spec](../../spec/README.md)`. Changes to schema behavior should include the corresponding specification tests and generated-schema check.
 
 ## Related documentation
 
@@ -204,3 +214,4 @@ The CLI depends on the local package in [`../../spec`](../../spec/README.md). Ch
 - [Concepts](../../docs/concepts.md)
 - [Packaging agent implementations](../../docs/packaging.md)
 - [Examples](../../examples)
+
