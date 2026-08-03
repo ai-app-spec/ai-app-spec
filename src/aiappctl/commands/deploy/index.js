@@ -34,6 +34,7 @@ export function parseDeployArguments(args) {
   let projectId;
   let vaultId;
   const secretBindings = new Map();
+  let agentId;
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -44,7 +45,8 @@ export function parseDeployArguments(args) {
       argument === "--environment-id" ||
       argument === "--project" ||
       argument === "--vault-id" ||
-      argument === "--secret-binding"
+      argument === "--secret-binding" ||
+      argument === "--agent-id"
     ) {
       const value = args[index + 1];
       if (!value || value.startsWith("--")) {
@@ -81,6 +83,11 @@ export function parseDeployArguments(args) {
         if (result.error) {
           return result;
         }
+      } else if (argument === "--agent-id") {
+        if (agentId !== undefined) {
+          return { error: "--agent-id may only be specified once" };
+        }
+        agentId = value;
       }
 
       index += 1;
@@ -152,6 +159,17 @@ export function parseDeployArguments(args) {
       continue;
     }
 
+    if (argument.startsWith("--agent-id=")) {
+      if (agentId !== undefined) {
+        return { error: "--agent-id may only be specified once" };
+      }
+      agentId = argument.slice("--agent-id=".length) || undefined;
+      if (!agentId) {
+        return { error: "--agent-id requires a value" };
+      }
+      continue;
+    }
+
     return { error: `unexpected argument '${argument}'` };
   }
 
@@ -166,7 +184,6 @@ export function parseDeployArguments(args) {
       error: `unsupported runtime '${runtime}'; supported runtimes: ${supportedRuntimes}`,
     };
   }
-
   return {
     inputPath,
     runtime,
@@ -174,6 +191,7 @@ export function parseDeployArguments(args) {
     projectId,
     secretBindings,
     vaultId,
+    agentId,
   };
 }
 

@@ -473,6 +473,7 @@ describe("aiappctl", () => {
         format: "anthropic.com/managed-agent:v1",
         providerId: "agent_test_123",
         providerVersion: 1,
+        operation: "created",
       },
     ]);
     expect(request.url).toBe("https://api.anthropic.test/v1/agents");
@@ -488,9 +489,120 @@ describe("aiappctl", () => {
     });
   });
 
+  test("updates an explicitly selected Anthropic Managed Agent", async () => {
+    const requests = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+      requests.push({
+        url: url.toString(),
+        method: init.method,
+        body: init.body ? JSON.parse(init.body) : undefined,
+      });
+
+      if (init.method === "GET") {
+        return Response.json({
+          id: "agent_existing123",
+          version: 4,
+          archived_at: null,
+        });
+      }
+      return Response.json({ id: "agent_existing123", version: 5 });
+    };
+
+    let result;
+    try {
+      result = await deploy(helloClaudeValidation(), {
+        runtime: "claude",
+        apiKey: "test-api-key",
+        baseUrl: "https://api.anthropic.test",
+        agentId: "agent_existing123",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(result.errors).toEqual([]);
+    expect(result.deployed[0]).toMatchObject({
+      providerId: "agent_existing123",
+      providerVersion: 5,
+      operation: "updated",
+    });
+    expect(requests.map(({ method, url }) => [method, url])).toEqual([
+      ["GET", "https://api.anthropic.test/v1/agents/agent_existing123"],
+      ["POST", "https://api.anthropic.test/v1/agents/agent_existing123"],
+    ]);
+    expect(requests[1].body).toMatchObject({ version: 4 });
+  });
+
+  test("rejects a missing explicitly selected Anthropic Managed Agent", async () => {
+    let mutationCalls = 0;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (_url, init) => {
+      if (init.method !== "GET") {
+        mutationCalls += 1;
+      }
+      return Response.json(
+        { error: { message: "not found" } },
+        { status: 404 },
+      );
+    };
+
+    let result;
+    try {
+      result = await deploy(helloClaudeValidation(), {
+        runtime: "claude",
+        apiKey: "test-api-key",
+        baseUrl: "https://api.anthropic.test",
+        agentId: "agent_missing123",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(mutationCalls).toBe(0);
+    expect(result.errors).toEqual([
+      "Anthropic Agent 'agent_missing123' does not exist",
+    ]);
+  });
+
+  test("rejects --agent-id for a Claude app with multiple Agent resources", async () => {
+    const validation = helloClaudeValidation();
+    const secondAgent = {
+      ...validation.manifest.spec.resources[0],
+      id: "second-agent",
+    };
+    validation.manifest.spec.resources.push(secondAgent);
+    validation.resolvedPackages.set(
+      secondAgent.id,
+      validation.resolvedPackages.get("greeter"),
+    );
+    let fetchCalls = 0;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      fetchCalls += 1;
+      return Response.json({ id: "unexpected" });
+    };
+
+    let result;
+    try {
+      result = await deploy(validation, {
+        runtime: "claude",
+        apiKey: "test-api-key",
+        baseUrl: "https://api.anthropic.test",
+        agentId: "agent_existing123",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(fetchCalls).toBe(0);
+    expect(result.errors).toEqual([
+      "--agent-id can only be used when the app contains exactly one Agent resource",
+    ]);
+  });
+
   test("deploys a Google Managed Agent package", async () => {
     const requests = [];
-    let agentGets = 0;
     let operationPolls = 0;
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async (url, init) => {
@@ -527,13 +639,6 @@ describe("aiappctl", () => {
         });
       }
       if (pathname.endsWith("/agents/greeter")) {
-        agentGets += 1;
-        if (agentGets === 1) {
-          return Response.json(
-            { error: { message: "not found" } },
-            { status: 404 },
-          );
-        }
         return Response.json({
           name: "projects/test-project/locations/global/agents/greeter",
           id: "greeter",
@@ -567,13 +672,10 @@ describe("aiappctl", () => {
         format: "google.com/managed-agent:v1",
         providerId:
           "projects/test-project/locations/global/agents/greeter",
+        operation: "created",
       },
     ]);
     expect(requests.map((request) => [request.method, request.url])).toEqual([
-      [
-        "GET",
-        "https://aiplatform.googleapis.test/v1beta1/projects/test-project/locations/global/agents/greeter",
-      ],
       [
         "POST",
         "https://aiplatform.googleapis.test/v1beta1/projects/test-project/locations/global/agents",
@@ -607,7 +709,6 @@ describe("aiappctl", () => {
 
   test("deploys Gemini MCP tools with Secret Manager credentials and networking", async () => {
     const requests = [];
-    let agentGets = 0;
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async (url, init) => {
       const request = {
@@ -627,13 +728,6 @@ describe("aiappctl", () => {
         });
       }
       if (parsedUrl.pathname.endsWith("/agents/product-manager")) {
-        agentGets += 1;
-        if (agentGets === 1) {
-          return Response.json(
-            { error: { message: "not found" } },
-            { status: 404 },
-          );
-        }
         return Response.json({
           name: "projects/test-project/locations/global/agents/product-manager",
           id: "product-manager",
@@ -831,21 +925,21 @@ describe("aiappctl", () => {
         });
       }
       if (
-        parsedUrl.pathname.endsWith("/agents/product-manager") &&
+        parsedUrl.pathname.endsWith("/agents/existing-product-manager") &&
         init.method === "GET"
       ) {
         return Response.json({
-          name: "projects/test-project/locations/global/agents/product-manager",
-          id: "product-manager",
+          name: "projects/test-project/locations/global/agents/existing-product-manager",
+          id: "existing-product-manager",
         });
       }
       if (
-        parsedUrl.pathname.endsWith("/agents/product-manager") &&
+        parsedUrl.pathname.endsWith("/agents/existing-product-manager") &&
         init.method === "PATCH"
       ) {
         return Response.json({
-          name: "projects/test-project/locations/global/agents/product-manager",
-          id: "product-manager",
+          name: "projects/test-project/locations/global/agents/existing-product-manager",
+          id: "existing-product-manager",
         });
       }
       return Response.json(
@@ -858,6 +952,7 @@ describe("aiappctl", () => {
     try {
       result = await deploy(productManagerGeminiValidation(), {
         runtime: "gemini",
+        agentId: "existing-product-manager",
         projectId: "test-project",
         accessToken: "test-access-token",
         baseUrl: "https://aiplatform.googleapis.test",
@@ -874,6 +969,11 @@ describe("aiappctl", () => {
     }
 
     expect(result.errors).toEqual([]);
+    expect(result.deployed[0]).toMatchObject({
+      providerId:
+        "projects/test-project/locations/global/agents/existing-product-manager",
+      operation: "updated",
+    });
     expect(requests.some((request) => request.method === "POST")).toBe(false);
     const patchRequest = requests.find(
       (request) => request.method === "PATCH",
@@ -884,6 +984,38 @@ describe("aiappctl", () => {
     expect(patchRequest.body.tools[0].headers.Authorization).toBe(
       "Bearer rotated-linear-token",
     );
+  });
+
+  test("rejects a missing explicitly selected Gemini Managed Agent", async () => {
+    let mutationCalls = 0;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (_url, init) => {
+      if (init.method !== "GET") {
+        mutationCalls += 1;
+      }
+      return Response.json(
+        { error: { message: "not found", status: "NOT_FOUND" } },
+        { status: 404 },
+      );
+    };
+
+    let result;
+    try {
+      result = await deploy(helloGeminiValidation(), {
+        runtime: "gemini",
+        agentId: "missing-agent",
+        projectId: "test-project",
+        accessToken: "test-access-token",
+        baseUrl: "https://aiplatform.googleapis.test",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(mutationCalls).toBe(0);
+    expect(result.errors).toEqual([
+      "Google failed to deploy resource 'greeter' (Google Agent 'missing-agent' does not exist)",
+    ]);
   });
 
   test("deploys an Agent with referenced MCPServer resources", async () => {
@@ -979,6 +1111,7 @@ describe("aiappctl", () => {
         format: "anthropic.com/managed-agent:v1",
         providerId: "agent_product_manager",
         providerVersion: 1,
+        operation: "created",
       },
     ]);
     expect(requests.map((request) => [request.method, request.url])).toEqual([
@@ -1311,6 +1444,22 @@ describe("aiappctl", () => {
 
     expect(result.error).toBeUndefined();
     expect(result.environmentId).toBe("env_existing");
+  });
+
+  test("treats provider Agent ids as opaque values", () => {
+    const claude = parseDeployArguments([
+      "--runtime=claude",
+      "--package=./app",
+      "--agent-id=opaque:claude/id",
+    ]);
+    const gemini = parseDeployArguments([
+      "--runtime=gemini",
+      "--package=./app",
+      "--agent-id=opaque:gemini/id",
+    ]);
+
+    expect(claude.agentId).toBe("opaque:claude/id");
+    expect(gemini.agentId).toBe("opaque:gemini/id");
   });
 
   test("parses a Google Cloud project", () => {

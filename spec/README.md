@@ -154,8 +154,8 @@ secret. Google also requires `roles/mcp.toolUser` for the deploying identity
 and associated service account. The CLI resolves the secret before the first
 Agent mutation and configures it as the Linear MCP server's bearer header
 without printing the value. Adding a new Secret Manager version and deploying
-again patches the existing Agent's complete tool configuration with the
-rotated credential.
+again with the same `--agent-id` patches the existing Agent's complete tool
+configuration with the rotated credential.
 
 Deploy the authenticated Product Manager example using a pre-provisioned Claude vault:
 
@@ -164,9 +164,12 @@ export ANTHROPIC_API_KEY="your-anthropic-api-key"
 bun run deploy \
   --runtime claude \
   --package=../../examples/product-manager-claude \
+  --agent-id agent_... \
   --environment-id env_... \
   --vault-id vlt_...
 ```
+
+`--agent-id` retrieves and updates an existing Anthropic Agent instead of creating a new one. It currently applies to apps containing exactly one Agent resource and must be supplied on every update.
 
 The vault must belong to the Anthropic workspace selected by `ANTHROPIC_API_KEY` and contain an active `static_bearer` or `mcp_oauth` credential for every authenticated MCP server URL referenced by an Agent. The CLI never accepts secret values and does not create, update, archive, or delete vaults or credentials.
 
@@ -176,11 +179,14 @@ The environment must belong to the same Anthropic workspace and must not be arch
 
 The experimental `gemini` runtime accepts `google.com/managed-agent:v1`
 packages and sends them to the Gemini Enterprise Agent Platform Managed Agents
-API in the `global` location. The adapter uses the Agent resource ID as the
-Google Agent ID, authenticates with Google Application Default Credentials,
-and waits for the create operation to complete before retrieving the Agent.
-The Google Managed Agents API is currently a Pre-GA service intended for
-testing and evaluation.
+API in the `global` location. Without `--agent-id`, the adapter creates an
+Agent using the app resource ID as its Google Agent ID. With `--agent-id`, it
+retrieves and updates that exact Agent instead; the option currently applies
+to apps containing exactly one Agent resource and must be supplied on every
+update. The adapter authenticates with Google Application Default Credentials
+and waits for create operations to complete before retrieving the Agent. It
+does not list or discover existing Agents. The Google Managed Agents API is
+currently a Pre-GA service intended for testing and evaluation.
 
 During Gemini deployment, referenced `MCPServer` resources become
 `mcp_server` tools. An Agent's execution environment requirement becomes a
@@ -189,9 +195,11 @@ allowlist contains only the hostnames of that Agent's referenced MCP servers.
 Authenticated servers require a `--secret-binding` from the logical secret ID
 to a Secret Manager version in the deployment project. The adapter resolves
 all required secret values before mutating an Agent and supplies them as MCP
-authorization headers. Existing Agents are updated in place, allowing a new
-Secret Manager version to be applied by deploying again.
+authorization headers. Existing Agents are updated in place only when their
+ID is explicitly supplied with `--agent-id`.
 
 During Claude deployment, each Agent's referenced `MCPServer` resources are composed into the provider request as `mcp_servers` entries with matching `mcp_toolset` entries. MCP authentication is not included in the reusable Agent definition. If any referenced MCP server declares authentication, `--vault-id` is required. Before creating an Agent, the adapter retrieves that vault and verifies from credential metadata that every authenticated MCP server URL has an active compatible credential. A missing, archived, or non-conforming vault fails deployment before the first provider mutation.
 
-Environment and vault bindings are consumed through `environment_id` and `vault_ids` on Claude sessions and scheduled deployments. The current CLI does not yet create either, so this implementation verifies the bindings but cannot attach them to an execution yet. Claude environments are mutable and can be archived after verification, so the binding must be checked again when an execution is created. The initial implementation also does not persist or reconcile Agent IDs or resolve external package locations. Each successful invocation therefore creates a new Managed Agent. Provider failures can leave an Agent created earlier in a multi-resource deployment; its ID is reported on stderr.
+Environment and vault bindings are consumed through `environment_id` and `vault_ids` on Claude sessions and scheduled deployments. The current CLI does not yet create either, so this implementation verifies the bindings but cannot attach them to an execution yet. Claude environments are mutable and can be archived after verification, so the binding must be checked again when an execution is created.
+
+When `--agent-id` is omitted, Claude deployment creates a new Agent. When it is supplied, the adapter retrieves that Agent, verifies that it exists and is active, and updates it using its current version for optimistic concurrency control. The CLI does not persist or discover Agent IDs, so callers must retain and resupply the ID. External package locations remain unsupported. Provider failures can leave an Agent created or updated earlier in a multi-resource deployment; its ID is reported on stderr.
