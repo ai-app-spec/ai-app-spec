@@ -7,13 +7,6 @@ import { verifyClaudeVault } from "./claude/vault.js";
 const ANTHROPIC_MANAGED_AGENT_FORMAT = "anthropic.com/managed-agent:v1";
 const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
 const ANTHROPIC_MAX_MCP_SERVERS = 20;
-const ANTHROPIC_AGENT_ID_PATTERN = /^agent_[A-Za-z0-9]+$/;
-
-function validateClaudeAgentId(agentId) {
-  if (!ANTHROPIC_AGENT_ID_PATTERN.test(agentId)) {
-    return "--agent-id must be an Anthropic Agent ID beginning with 'agent_'";
-  }
-}
 
 function parseImplementationPackage(source, packagePath, resourceId) {
   const document = parseDocument(source, {
@@ -264,6 +257,5 @@ async function deployToClaude(validation, options) {
 export const claudeRuntime = {
   name: "claude",
   formats: new Set([ANTHROPIC_MANAGED_AGENT_FORMAT]),
-  validateAgentId: validateClaudeAgentId,
   deploy: deployToClaude,
 };

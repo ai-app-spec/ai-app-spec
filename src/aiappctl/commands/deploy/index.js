@@ -184,13 +184,6 @@ export function parseDeployArguments(args) {
       error: `unsupported runtime '${runtime}'; supported runtimes: ${supportedRuntimes}`,
     };
   }
-  if (agentId) {
-    const agentIdError = runtimeAdapters.get(runtime).validateAgentId(agentId);
-    if (agentIdError) {
-      return { error: agentIdError };
-    }
-  }
-
   return {
     inputPath,
     runtime,

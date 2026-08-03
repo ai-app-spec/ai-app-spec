@@ -13,19 +13,12 @@ const GOOGLE_CLOUD_PLATFORM_SCOPE =
   "https://www.googleapis.com/auth/cloud-platform";
 const DEFAULT_OPERATION_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_OPERATION_TIMEOUT_MS = 5 * 60 * 1_000;
-const GOOGLE_AGENT_ID_PATTERN = /^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const GOOGLE_PATCHABLE_AGENT_FIELDS = [
   "description",
   "system_instruction",
   "tools",
   "base_environment",
 ];
-
-function validateGoogleAgentId(agentId) {
-  if (!GOOGLE_AGENT_ID_PATTERN.test(agentId)) {
-    return "--agent-id must be a Google Agent ID containing 1-63 lowercase letters, numbers, or hyphens, beginning with a letter and ending with a letter or number";
-  }
-}
 
 function parseImplementationPackage(source, packagePath, resourceId) {
   const document = parseDocument(source, {
@@ -671,6 +664,5 @@ async function deployToGemini(validation, options) {
 export const geminiRuntime = {
   name: "gemini",
   formats: new Set([GOOGLE_MANAGED_AGENT_FORMAT]),
-  validateAgentId: validateGoogleAgentId,
   deploy: deployToGemini,
 };

@@ -1446,22 +1446,20 @@ describe("aiappctl", () => {
     expect(result.environmentId).toBe("env_existing");
   });
 
-  test("parses and validates an Anthropic Agent id", () => {
-    const parsed = parseDeployArguments([
+  test("treats provider Agent ids as opaque values", () => {
+    const claude = parseDeployArguments([
       "--runtime=claude",
       "--package=./app",
-      "--agent-id=agent_existing123",
+      "--agent-id=opaque:claude/id",
     ]);
-    const invalid = parseDeployArguments([
-      "--runtime=claude",
+    const gemini = parseDeployArguments([
+      "--runtime=gemini",
       "--package=./app",
-      "--agent-id=production",
+      "--agent-id=opaque:gemini/id",
     ]);
 
-    expect(parsed.agentId).toBe("agent_existing123");
-    expect(invalid.error).toBe(
-      "--agent-id must be an Anthropic Agent ID beginning with 'agent_'",
-    );
+    expect(claude.agentId).toBe("opaque:claude/id");
+    expect(gemini.agentId).toBe("opaque:gemini/id");
   });
 
   test("parses a Google Cloud project", () => {
@@ -1474,24 +1472,6 @@ describe("aiappctl", () => {
 
     expect(result.error).toBeUndefined();
     expect(result.projectId).toBe("test-project");
-  });
-
-  test("parses and validates a Google Agent id", () => {
-    const parsed = parseDeployArguments([
-      "--runtime=gemini",
-      "--package=./app",
-      "--agent-id=product-manager",
-    ]);
-    const invalid = parseDeployArguments([
-      "--runtime=gemini",
-      "--package=./app",
-      "--agent-id=Product_Manager",
-    ]);
-
-    expect(parsed.agentId).toBe("product-manager");
-    expect(invalid.error).toContain(
-      "--agent-id must be a Google Agent ID",
-    );
   });
 
   test("parses repeatable provider secret bindings", () => {
