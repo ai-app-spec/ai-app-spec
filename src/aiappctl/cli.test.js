@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -355,6 +363,10 @@ describe("aiappctl", () => {
         ),
       );
       expect(buildManifest).toMatchObject({
+        schemaVersion: 2,
+        generator: {
+          name: "aiappctl",
+        },
         source: {
           app: "product-manager-eve",
           entrypoint: "product-manager",
@@ -375,12 +387,177 @@ describe("aiappctl", () => {
           ],
         },
       });
+      expect(buildManifest.generatedFiles).toEqual(
+        expect.objectContaining({
+          ".env.example": expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+          "agent/agent.ts": expect.stringMatching(
+            /^sha256:[a-f0-9]{64}$/,
+          ),
+          "agent/connections/linear.ts": expect.stringMatching(
+            /^sha256:[a-f0-9]{64}$/,
+          ),
+          "agent/instructions.md": expect.stringMatching(
+            /^sha256:[a-f0-9]{64}$/,
+          ),
+          "package.json": expect.stringMatching(
+            /^sha256:[a-f0-9]{64}$/,
+          ),
+        }),
+      );
+      expect(buildManifest.generatedFiles).not.toHaveProperty(
+        "aiappctl.build.json",
+      );
     } finally {
       await rm(temporaryDirectory, { recursive: true, force: true });
     }
   });
 
-  test("does not overwrite an existing Eve build output path", async () => {
+  test("rebuilds a clean Eve project while preserving unmanaged files", async () => {
+    const temporaryDirectory = await mkdtemp(
+      path.join(os.tmpdir(), "aiappctl-eve-rebuild-"),
+    );
+    const outPath = path.join(temporaryDirectory, "product-manager-eve");
+    const buildArguments = [
+      "build",
+      "--runtime=eve",
+      `--package=${path.join(examplesPath, "product-manager-eve")}`,
+      `--out=${outPath}`,
+    ];
+
+    try {
+      expect((await run(...buildArguments)).exitCode).toBe(0);
+
+      const vercelProjectPath = path.join(outPath, ".vercel/project.json");
+      await mkdir(path.dirname(vercelProjectPath), { recursive: true });
+      await writeFile(vercelProjectPath, '{"projectId":"test"}\n');
+
+      const obsoleteContents = "obsolete\n";
+      const obsoletePath = path.join(outPath, "obsolete.txt");
+      await writeFile(obsoletePath, obsoleteContents);
+      const manifestPath = path.join(outPath, "aiappctl.build.json");
+      const previousManifest = JSON.parse(
+        await readFile(manifestPath, "utf8"),
+      );
+      previousManifest.generatedFiles["obsolete.txt"] =
+        `sha256:${createHash("sha256").update(obsoleteContents).digest("hex")}`;
+      await writeFile(
+        manifestPath,
+        `${JSON.stringify(previousManifest, null, 2)}\n`,
+      );
+
+      const result = await run(...buildArguments);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr).toBe("");
+      expect(await readFile(vercelProjectPath, "utf8")).toBe(
+        '{"projectId":"test"}\n',
+      );
+      expect(await Bun.file(obsoletePath).exists()).toBe(false);
+      const nextManifest = JSON.parse(
+        await readFile(manifestPath, "utf8"),
+      );
+      expect(nextManifest.generatedFiles).not.toHaveProperty(
+        "obsolete.txt",
+      );
+    } finally {
+      await rm(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+
+  test("updates generated Eve files from a changed source package", async () => {
+    const temporaryDirectory = await mkdtemp(
+      path.join(os.tmpdir(), "aiappctl-eve-update-"),
+    );
+    const sourcePath = path.join(temporaryDirectory, "source");
+    const outPath = path.join(temporaryDirectory, "output");
+    const buildArguments = [
+      "build",
+      "--runtime=eve",
+      `--package=${sourcePath}`,
+      `--out=${outPath}`,
+    ];
+
+    try {
+      await cp(path.join(examplesPath, "product-manager-eve"), sourcePath, {
+        recursive: true,
+      });
+      expect((await run(...buildArguments)).exitCode).toBe(0);
+
+      const packagePath = path.join(
+        sourcePath,
+        "packages/product-manager.agentpkg.yaml",
+      );
+      const packageSource = (
+        await readFile(packagePath, "utf8")
+      ).replace(
+        "  evidence from inference",
+        "  Prioritize weekly trends. Clearly distinguish evidence from inference",
+      );
+      await writeFile(packagePath, packageSource);
+      const packageDigest = createHash("sha256")
+        .update(packageSource)
+        .digest("hex");
+      const appPath = path.join(sourcePath, "app.yaml");
+      const appSource = (await readFile(appPath, "utf8"))
+        .replace("version: 0.1.0", "version: 0.2.0")
+        .replace(
+          /digest: sha256:[a-f0-9]{64}/,
+          `digest: sha256:${packageDigest}`,
+        );
+      await writeFile(appPath, appSource);
+
+      const result = await run(...buildArguments);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr).toBe("");
+      expect(
+        await readFile(path.join(outPath, "agent/instructions.md"), "utf8"),
+      ).toContain("Prioritize weekly trends");
+      expect(
+        JSON.parse(await readFile(path.join(outPath, "package.json"), "utf8"))
+          .version,
+      ).toBe("0.2.0");
+      expect(
+        JSON.parse(
+          await readFile(path.join(outPath, "aiappctl.build.json"), "utf8"),
+        ).source.version,
+      ).toBe("0.2.0");
+    } finally {
+      await rm(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects drift in an existing Eve build", async () => {
+    const temporaryDirectory = await mkdtemp(
+      path.join(os.tmpdir(), "aiappctl-eve-drift-"),
+    );
+    const outPath = path.join(temporaryDirectory, "product-manager-eve");
+    const buildArguments = [
+      "build",
+      "--runtime=eve",
+      `--package=${path.join(examplesPath, "product-manager-eve")}`,
+      `--out=${outPath}`,
+    ];
+
+    try {
+      expect((await run(...buildArguments)).exitCode).toBe(0);
+      await writeFile(
+        path.join(outPath, "agent/instructions.md"),
+        "locally edited\n",
+      );
+
+      const result = await run(...buildArguments);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain(
+        "generated Eve project has drifted in managed file: 'agent/instructions.md'",
+      );
+    } finally {
+      await rm(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects an existing Eve output without a build manifest", async () => {
     const outPath = await mkdtemp(
       path.join(os.tmpdir(), "aiappctl-eve-existing-"),
     );
@@ -395,10 +572,40 @@ describe("aiappctl", () => {
 
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain(
-        `output path already exists: ${outPath}; choose a new --out directory`,
+        `output path exists without aiappctl.build.json: ${outPath}`,
       );
     } finally {
       await rm(outPath, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects an older Eve build manifest schema", async () => {
+    const temporaryDirectory = await mkdtemp(
+      path.join(os.tmpdir(), "aiappctl-eve-manifest-v1-"),
+    );
+    const outPath = path.join(temporaryDirectory, "product-manager-eve");
+    const buildArguments = [
+      "build",
+      "--runtime=eve",
+      `--package=${path.join(examplesPath, "product-manager-eve")}`,
+      `--out=${outPath}`,
+    ];
+
+    try {
+      expect((await run(...buildArguments)).exitCode).toBe(0);
+      const manifestPath = path.join(outPath, "aiappctl.build.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+      manifest.schemaVersion = 1;
+      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+      const result = await run(...buildArguments);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain(
+        "existing aiappctl.build.json uses unsupported schema version '1'; rebuild into a new --out directory",
+      );
+    } finally {
+      await rm(temporaryDirectory, { recursive: true, force: true });
     }
   });
 
