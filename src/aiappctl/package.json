@@ -9,6 +9,7 @@
   },
   "scripts": {
     "test": "bun test",
+    "build:app": "bun ./cli.js build",
     "validate": "bun ./cli.js validate",
     "deploy": "bun ./cli.js deploy"
   },
