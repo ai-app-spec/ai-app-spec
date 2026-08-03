@@ -69,5 +69,4 @@ bun test
 
 CI runs `bun run generate:check` to ensure the checked-in JSON Schema matches the Zod source.
 
-For reference CLI usage, local package validation, supported runtime adapters,
-and build and deployment behavior, see [`aiappctl`](../src/aiappctl/README.md).
+For reference CLI usage, local package validation, supported runtime adapters, and build and deployment behavior, see [`aiappctl`](../src/aiappctl/README.md).
